@@ -1,11 +1,9 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request
 import json
 import random
 import time
 import base64
-import logging
 import requests
-from database import log_timestamp
 
 app = Flask(__name__)
 
