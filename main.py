@@ -3,19 +3,24 @@ import json
 import random
 import time
 import base64
-import logging
 import requests
+import logging
 from database import log_timestamp
 
-app = Flask(__name__)
+# Configure logging
+logging.basicConfig(level=logging.INFO, filename='logs/'+log_timestamp()+'.log')
 
 json_config = json.loads(open('config.json').read())
 APP_TOKEN, PROMO_ID = json_config['APP_TOKEN'], json_config['PROMO_ID']
-DEBUG_MODE = json_config['DEBUG']
-EVENTS_DELAY = json_config['EVENTS_DELAY'][1] if DEBUG_MODE else json_config['EVENTS_DELAY'][0]
+DEBUG_MODE = False
+EVENTS_DELAY = 0.35 if DEBUG_MODE else 20
 
-USER_ID, USER, HASH = None, None, None
-farmed_keys, attempts = 0, {}
+USER_ID = None
+USER = None
+HASH = None
+
+farmed_keys = 0
+attempts = {}
 
 def delay_random():
     return random.random() / 3 + 1
@@ -26,14 +31,15 @@ def sleep(ms):
 def generate_client_id():
     timestamp = int(time.time() * 1000)
     random_numbers = ''.join(str(random.randint(0, 9)) for _ in range(19))
+    logging.info(f'{timestamp}-{random_numbers}')
     return f'{timestamp}-{random_numbers}'
 
 def login(client_id):
     if not client_id:
         raise ValueError('No client id')
     if DEBUG_MODE:
-        return APP_TOKEN + ':deviceid:'+generate_client_id()+':8B5BnSuEV2W:' + str(int(time.time()))
-    
+        logging.info('d28721be-fd2d-4b45-869e-9f253b554e50:deviceid:1722266117413-8779883520062908680:8B5BnSuEV2W:' + str(int(time.time())))
+        return 'd28721be-fd2d-4b45-869e-9f253b554e50:deviceid:1722266117413-8779883520062908680:8B5BnSuEV2W:' + str(int(time.time()))
     response = requests.post('https://api.gamepromo.io/promo/login-client', headers={
         'content-type': 'application/json; charset=utf-8',
         'Host': 'api.gamepromo.io'
@@ -65,7 +71,6 @@ def emulate_progress(client_token):
 def generate_key(client_token):
     if DEBUG_MODE:
         return 'BIKE-TH1S-1S-JU5T-T35T' if attempts.get(client_token, 0) >= 5 else ''
-    
     response = requests.post('https://api.gamepromo.io/promo/create-code', headers={
         'content-type': 'application/json; charset=utf-8',
         'Host': 'api.gamepromo.io',
@@ -100,7 +105,9 @@ def start():
         status = response_data.get('status')
         points = response_data.get('points')
         if status != 'ok':
+            logging.error(f"⛔ {status}")
             return f"⛔ {status}", 400
         farmed_keys += 1
+        logging.info(f"+💎{points * farmed_keys}")
         return f"@{USER}: +💎{points * farmed_keys}", 200
     return key, 200
