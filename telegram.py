@@ -39,8 +39,9 @@ async def send_welcome(message: types.Message):
     inline_kb = InlineKeyboardMarkup().add(inline_btn_generate)
     
     try:
-        await bot.delete_message(chat_id=message.chat.id, message_id=WELCOME.message_id)
-    except Exception  as e:
+        if WELCOME:
+            await bot.delete_message(chat_id=message.chat.id, message_id=WELCOME.message_id)
+    except MessageToDeleteNotFound:
         pass
     text = '<b>I\'m Hamster Bike Keygen Bot!</b>\n\n<b>Today you generate:</b>\n'
     if today_keys:
