@@ -31,27 +31,26 @@ WELCOME = None
 @dp.message_handler(commands=['start'])
 async def send_welcome(message: types.Message):
     global WELCOME
-    insert_user(message.from_user.id)
+    insert_user(message.from_user.id, message.from_user.username)
     # Create inline keyboard
     
     today_keys = get_all_user_keys_24h(message.from_user.id)
     inline_btn_generate = InlineKeyboardButton('Generate Key', callback_data='generate_key') # type: ignore
     inline_kb = InlineKeyboardMarkup().add(inline_btn_generate)
-
-    if WELCOME is not None and WELCOME.message_id != message.message_id:
-        try:
-            await bot.delete_message(chat_id=message.chat.id, message_id=WELCOME.message_id)
-        except MessageToDeleteNotFound:
-            pass
+    
+    try:
+        await bot.delete_message(chat_id=message.chat.id, message_id=WELCOME.message_id)
+    except Exception  as e:
+        pass
+    text = '<b>I\'m Hamster Bike Keygen Bot!</b>\n\n<b>Today you generate:</b>\n'
+    if today_keys:
+        text += '\n'.join([f'<code>{key}</code> ({format_remaining_time(key_time)})' for key, key_time in today_keys])
     else:
-        text = '<b>I\'m Hamster Bike Keygen Bot!</b>\n\n<b>Today you generate:</b>\n'
-        if today_keys:
-            text += '\n'.join([f'<code>{key}</code> ({format_remaining_time(key_time)})' for key, key_time in today_keys])
-        else:
-            text += '\n<i>No keys generated today</i>'
-        text += '\n\n<b>Your attempts today:</b> {}/5'.format(5 - len(today_keys) if today_keys else 5)
-        text += "\n<i>Click the button below to generate a key</i>"
-        WELCOME = await bot.send_message(text=text, chat_id=message.chat.id, parse_mode=ParseMode.HTML, reply_markup=inline_kb)
+        text += '\n<i>No keys generated today</i>'
+    text += '\n\n<b>Your attempts today:</b> {}/5'.format(5 - len(today_keys) if today_keys else 5)
+    text += "\n<i>Click the button below to generate a key</i>"
+    WELCOME = await bot.send_message(text=text, chat_id=message.chat.id, parse_mode=ParseMode.HTML, reply_markup=inline_kb)
+    
     try:
         await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
     except MessageToDeleteNotFound:
@@ -60,7 +59,7 @@ async def send_welcome(message: types.Message):
 async def update_loadbar(message: types.Message):
     while not process_completed:
         text, i = generate_loading_bar()
-        await bot.edit_message_text("Generating key..." + '\n' + text, message.chat.id, message.message_id, parse_mode=ParseMode.HTML)
+        await bot.edit_message_text("Generating key...\nEstimated time: 25~30 seconds" + '\n' + text, message.chat.id, message.message_id, parse_mode=ParseMode.HTML)
 
 loading_message = None
 
