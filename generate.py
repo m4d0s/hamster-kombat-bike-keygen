@@ -1,10 +1,12 @@
 from flask import Flask, request
 import json
 import random
+import logging
 import time
 import asyncio
 import base64
 import requests
+from database import log_timestamp
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, filename='logs/'+log_timestamp()+'.log', format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')

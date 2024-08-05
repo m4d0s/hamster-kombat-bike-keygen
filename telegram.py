@@ -1,11 +1,9 @@
 import logging
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ParseMode, Message
-from aiogram.utils.exceptions import MessageNotModified
+from aiogram.utils.exceptions import MessageNotModified, MessageToDeleteNotFound
 import requests
 import json
-import asyncio
-import random
 from generate import app, sleep, generate_loading_bar
 import threading
 from database import log_timestamp, insert_key_generation, get_last_user_key
@@ -25,12 +23,6 @@ dp = Dispatcher(bot)
 FLASK_SERVER_URL = json_config['FLASK_SERVER']
 EVENTS_DELAY = json_config['EVENTS_DELAY'][1] if json_config['DEBUG'] else json_config['EVENTS_DELAY'][0]
 
-# def escape_markdown(text):
-#     chrs = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
-#     for c in chrs:
-#         text = text.replace(c, '\\' + c)
-#     return text
-
 async def new_message(message:str, chat_id: int):
     return await bot.send_message(text=message, chat_id=chat_id, parse_mode=ParseMode.HTML)
 
@@ -47,7 +39,10 @@ async def send_welcome(message: types.Message):
     inline_kb = InlineKeyboardMarkup().add(inline_btn_generate)
 
     if WELCOME is not None and WELCOME.message_id != message.message_id:
-        await bot.delete_message(chat_id=message.chat.id, message_id=WELCOME.message_id)
+        try:
+            await bot.delete_message(chat_id=message.chat.id, message_id=WELCOME.message_id)
+        except MessageToDeleteNotFound:
+            pass
     else:
         text = '<b>I\'m Hamster Bike Keygen Bot!</b>\n\n<b>Today you generate:</b>\n'
         if today_keys:
@@ -57,7 +52,10 @@ async def send_welcome(message: types.Message):
         text += '\n\n<b>Your attempts today:</b> {}/5'.format(5 - len(today_keys) if today_keys else 5)
         text += "\n<i>Click the button below to generate a key</i>"
         WELCOME = await bot.send_message(text=text, chat_id=message.chat.id, parse_mode=ParseMode.HTML, reply_markup=inline_kb)
-    await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
+    try:
+        await bot.delete_message(chat_id=message.chat.id, message_id=message.message_id)
+    except MessageToDeleteNotFound:
+        pass
 
 async def update_loadbar(message: types.Message):
     while not process_completed:
@@ -74,11 +72,16 @@ async def process_callback_generate_key(callback_query: types.CallbackQuery):
     await bot.answer_callback_query(callback_query.id)
     last_user_key = get_last_user_key(callback_query.from_user.id)
     today_keys = get_all_user_keys_24h(callback_query.from_user.id)
+    if today_keys is None:
+        today_keys = []
     if loading_message:
-        await bot.delete_message(chat_id=callback_query.from_user.id, message_id=loading_message.message_id)
+        try:
+            await bot.delete_message(chat_id=callback_query.from_user.id, message_id=loading_message.message_id)
+        except MessageNotModified or MessageToDeleteNotFound:
+            pass
         loading_message = None
     if not last_user_key or abs(relative_time(last_user_key[1])) > DELAY:
-        if today_keys and len(today_keys) < 5:
+        if len(today_keys) < 5:
             loading_message = await new_message("Generating key...", callback_query.from_user.id)
             
             # asyncio.create_task(update_loadbar(loading_message))

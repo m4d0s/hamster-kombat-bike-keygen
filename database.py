@@ -74,7 +74,6 @@ def format_remaining_time(target_time: int) -> str:
     if waste < 0:
         prefix = 'ago'
 
-    days = waste // (3600 * 24)
     hours, remainder = divmod(waste, 3600)
     minutes, seconds = divmod(remainder, 60)
     
