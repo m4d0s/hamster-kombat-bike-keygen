@@ -86,7 +86,7 @@ async def process_callback_generate_key(callback_query: types.CallbackQuery):
             loading_message = None
         if not last_user_key or abs(relative_time(last_user_key[1])) > DELAY and not process_completed:
             if len(today_keys) < 5:
-                loading_message = await new_message("Generating key...\nEstimated time: 25~30 seconds", callback_query.from_user.id)
+                loading_message = await new_message("Generating key...\nEstimated time: 2 minutes", callback_query.from_user.id)
                 
                 if WELCOME and loading_message.message_id - 1 != WELCOME.message_id:
                     await try_to_delete(chat_id=callback_query.from_user.id, message_id=loading_message.message_id - 1)
