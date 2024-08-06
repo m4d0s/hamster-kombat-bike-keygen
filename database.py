@@ -52,14 +52,14 @@ def get_all_user_keys_24h(user_id, day=0, db_path=db_path):
     
     return rows
 
-def insert_user(user_id, db_path=db_path):
+def insert_user(user_id, username, db_path=db_path):
     if user_id is None:
         return
     
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
     
-    cursor.execute("INSERT OR REPLACE INTO users (tg_id) VALUES (?)", (user_id,))
+    cursor.execute("INSERT OR REPLACE INTO users (tg_id, tg_username) VALUES (?,?)", (user_id,username))
     conn.commit()
     
     conn.close()
@@ -74,7 +74,6 @@ def format_remaining_time(target_time: int) -> str:
     if waste < 0:
         prefix = 'ago'
 
-    days = waste // (3600 * 24)
     hours, remainder = divmod(waste, 3600)
     minutes, seconds = divmod(remainder, 60)
     

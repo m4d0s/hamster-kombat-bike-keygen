@@ -1,10 +1,10 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request
 import json
 import random
+import logging
 import time
 import asyncio
 import base64
-import logging
 import requests
 from database import log_timestamp
 
