@@ -1,133 +1,114 @@
-from quart import Quart, request
 import json
 import random
 import logging
-import time
 import asyncio
-import base64
 import aiohttp
+import uuid
+from random import randint
 from database import log_timestamp
 
-# Configure logging
-logging.basicConfig(
-    filename=f'logs/{log_timestamp()}.log',
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+# Set up logging
+logging.basicConfig(level=logging.INFO, filename='logs/'+log_timestamp()+'.log', format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
-app = Quart(__name__)
-
-json_config = json.loads(open('config.json').read())
-ALL_PAIRS = [[json_config['EVENTS'][i]["APP_TOKEN"], json_config['EVENTS'][i]["PROMO_ID"]] for i in json_config['EVENTS']]
-DEBUG_MODE = json_config['DEBUG']
-EVENTS_DELAY = json_config['EVENTS_DELAY'][1] if DEBUG_MODE else json_config['EVENTS_DELAY'][0]
-USER_ID, USER, HASH = None, None, None
+# Load configuration
+config = json.loads(open('config.json').read())
+ALL_EVENTS = config['EVENTS']
+DEBUG_MODE = config['DEBUG']
+PROXY_LIST = config['PROXY']  # Load the list of proxies from config
 farmed_keys, attempts = 0, {}
-MAX_LOAD = 12
+loading, MAX_LOAD = 0, 15
+
+# Configure logging
+logging.basicConfig(level=logging.DEBUG if config['DEBUG'] else logging.INFO)
+logger = logging.getLogger(__name__)
+
+users = [x for x in ALL_EVENTS]
+
+def generate_loading_bar(progress=loading, length=MAX_LOAD, max=MAX_LOAD):
+    global loading, MAX_LOAD
+    text = '[' + '█' * int(progress / max * length) + '  ' * (20 - int(progress / max * length)) + ']' + f' {progress / max * 100:.2f}%'
+    return text
 
 def delay_random():
-    return random.random() / 3 + 1
+    return random.random() + 1
 
-def generate_client_id():
-    timestamp = int(time.time() * 1000)
-    random_numbers = ''.join(str(random.randint(0, 9)) for _ in range(19))
-    return f'{timestamp}-{random_numbers}'
+async def delay(ms):
+    ms += delay_random()
+    logger.debug(f"Waiting {ms}ms")
+    await asyncio.sleep(ms / 1000)
 
-async def login(client_id, app_token):
-    if not client_id:
-        raise ValueError('No client id')
-    if DEBUG_MODE:
-        return app_token + ':deviceid:' + generate_client_id() + ':8B5BnSuEV2W:' + str(int(time.time()))
-    
-    async with aiohttp.ClientSession() as session:
-        async with session.post('https://api.gamepromo.io/promo/login-client', json={
-            'appToken': app_token,
-            'clientId': client_id,
-            'clientOrigin': 'deviceid'
-        }) as response:
-            response_data = await response.json()
-            return response_data['clientToken']
+async def fetch_api(session, path, auth_token_or_body=None, body=None):
+    url = f'https://api.gamepromo.io{path}'
+    headers = {}
 
-async def emulate_progress(client_token, promo_id):
-    if not client_token:
-        raise ValueError('No access token')
-    if DEBUG_MODE:
-        return attempts.get(client_token, 0) >= 5
-    
-    async with aiohttp.ClientSession() as session:
-        async with session.post('https://api.gamepromo.io/promo/register-event', headers={
-            'Authorization': f'Bearer {client_token}'
-        }, json={
-            'promoId': promo_id,
-            'eventId': generate_client_id(),
+    if isinstance(auth_token_or_body, str):
+        headers['authorization'] = f'Bearer {auth_token_or_body}'
+
+    if auth_token_or_body is not None and not isinstance(auth_token_or_body, str):
+        headers['content-type'] = 'application/json'
+        body = auth_token_or_body
+
+    # Select a random proxy from the list
+    proxy = random.choice(PROXY_LIST)
+    logger.debug(f"Using proxy: {proxy}")
+
+    async with session.post(url, headers=headers, json=body, proxy=proxy) as res:
+        data = await res.text()
+
+        if config['DEBUG']:
+            logger.debug(f'URL: {url}')
+            logger.debug(f'Headers: {headers}')
+            logger.debug(f'Body: {body}')
+            logger.debug(f'Response Status: {res.status}')
+            logger.debug(f'Response Body: {data}')
+
+        if not res.ok:
+            raise Exception(f"{res.status} {res.reason}: {data}")
+
+        return await res.json()
+
+async def get_key(session, game_key):
+    global loading, MAX_LOAD
+    game_config = config['EVENTS'][game_key]
+    delay_ms = randint(config['EVENTS'][game_key]['EVENTS_DELAY'][0], config['EVENTS'][game_key]['EVENTS_DELAY'][1])
+    client_id = str(uuid.uuid4())
+
+    login_client_data = await fetch_api(session, '/promo/login-client', {
+        'appToken': game_config['APP_TOKEN'],
+        'clientId': client_id,
+        'clientOrigin': 'ios',
+    })
+    loading = loading + 1 
+    await delay(delay_ms)
+
+    auth_token = login_client_data['clientToken']
+    promo_code = None
+
+    for attempt in range(config['MAX_RETRY']):
+        register_event_data = await fetch_api(session, '/promo/register-event', auth_token, {
+            'promoId': game_config['PROMO_ID'],
+            'eventId': str(uuid.uuid4()),
             'eventOrigin': 'undefined'
-        }) as response:
-            response_data = await response.json()
-            return response_data['hasCode']
+        })
+        loading = loading + 1 
 
-async def generate_key(client_token, promo_id):
-    if DEBUG_MODE:
-        return 'BIKE-TH1S-1S-JU5T-T35T' if attempts.get(client_token, 0) >= 5 else ''
-    
-    async with aiohttp.ClientSession() as session:
-        async with session.post('https://api.gamepromo.io/promo/create-code', headers={
-            'Authorization': f'Bearer {client_token}'
-        }, json={
-            'promoId': promo_id
-        }) as response:
-            response_data = await response.json()
-            return response_data['promoCode']
+        if not register_event_data.get('hasCode'):
+            await delay(delay_ms)
+            continue
 
-loading = 0
-def generate_loading_bar(progress=loading, length=MAX_LOAD, max=MAX_LOAD):
-    text = '[' + '█' * int(progress / max * length) + '  ' * (20 - int(progress / max * length)) + ']' + f' {progress / max * 100:.2f}%'
-    return text, progress + 1
+        create_code_data = await fetch_api(session, '/promo/create-code', auth_token, {
+            'promoId': game_config['PROMO_ID'],
+        })
+        loading = loading + 1 
 
-async def process_pair(app_token, promo_id):
-    client_id = generate_client_id()
-    text, _ = generate_loading_bar(loading)
-    client_token = await login(client_id, app_token)
-    text, _ = generate_loading_bar(loading)
-
-    for i in range(7):
-        await asyncio.sleep(EVENTS_DELAY * delay_random())
-        text, _ = generate_loading_bar(loading)
-        if await emulate_progress(client_token, promo_id):
-            loading = MAX_LOAD - 3
+        promo_code = create_code_data.get('promoCode')
+        if promo_code:
             break
 
-    key = await generate_key(client_token, promo_id)
-    text, _ = generate_loading_bar(loading)
-    return key
+        await delay(delay_ms)
 
-@app.route('/keygen', methods=['GET'])
-async def start():
-    global USER_ID, USER, HASH, farmed_keys, loading
-    USER_ID = request.args.get('id')
-    USER = request.args.get('user')
-    HASH = request.args.get('hash')
-    
-    tasks = [process_pair(app_token, promo_id) for app_token, promo_id in ALL_PAIRS]
-    keys = await asyncio.gather(*tasks)
-    
-    if USER_ID:
-        keys_data = [{'id': USER_ID, 'user': USER, 'hash': HASH, 'key': key} for key in keys]
-        keys_base64 = [base64.b64encode(json.dumps(key_data).encode()).decode() for key_data in keys_data]
-        
-        async with aiohttp.ClientSession() as session:
-            results = []
-            for key_data in keys_base64:
-                async with session.post('http://176.119.159.166:7000/key', params={'v': key_data}) as response:
-                    response_data = await response.json()
-                    status = response_data.get('status')
-                    points = response_data.get('points')
-                    if status != 'ok':
-                        return f"⛔ {status}", 400
-                    farmed_keys += 1
-                    results.append(f"@{USER}: +💎{points * farmed_keys}")
-            return "\n".join(results), 200
-    return json.dumps(keys), 200
+    if promo_code is None:
+        logger.error('Failed to generate promo code after maximum retries')
+        return None
 
-if __name__ == '__main__':
-    print('Quart app started...')
-    app.run(debug=DEBUG_MODE)
+    return promo_code

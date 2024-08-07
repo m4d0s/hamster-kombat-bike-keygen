@@ -1,5 +1,4 @@
 import asyncpg
-import asyncio
 import logging
 import json
 from datetime import datetime
@@ -42,7 +41,7 @@ async def get_pool():
     return POOL
 
 
-async def insert_key_generation(user_id, key, pool=POOL):
+async def insert_key_generation(user_id, key, key_type, used = True, pool=POOL):
     if user_id is None or key is None:
         return
     
@@ -53,8 +52,8 @@ async def insert_key_generation(user_id, key, pool=POOL):
                 return None
             num = num['id']
             
-            await conn.execute(f'INSERT INTO "{SCHEMA}".keys (user_id, key, time) '+ 
-                               'VALUES ($1, $2, $3) ', num, key, now())
+            await conn.execute(f'INSERT INTO "{SCHEMA}".keys (user_id, key, time, type, used) '+ 
+                               'VALUES ($1, $2, $3, $4, $5) ', num, key, now(), key_type, used)
 
 async def get_last_user_key(user_id, pool=POOL):
     if user_id is None:
@@ -67,7 +66,7 @@ async def get_last_user_key(user_id, pool=POOL):
                 return None
             num = num['id']
             
-            row = await conn.fetchrow(f'SELECT key, time FROM "{SCHEMA}".keys WHERE user_id = $1 ORDER BY time DESC LIMIT 1', num)
+            row = await conn.fetchrow(f'SELECT key, time, type FROM "{SCHEMA}".keys WHERE user_id = $1 ORDER BY time DESC LIMIT 1', num)
     
     return row
 
@@ -82,7 +81,7 @@ async def get_all_user_keys_24h(user_id, day=0, pool=POOL):
                 return None
             num = num['id']
             
-            rows = await conn.fetch(f'SELECT key, time FROM "{SCHEMA}".keys WHERE user_id = $1 AND time > $2 ORDER BY time DESC', num, now() - 86400 * (abs(day) + 1))
+            rows = await conn.fetch(f'SELECT key, time, type FROM "{SCHEMA}".keys WHERE user_id = $1 AND time > $2 ORDER BY time DESC', num, now() - 86400 * (abs(day) + 1))
     
     return rows
 
@@ -108,8 +107,18 @@ async def get_all_dev(pool=POOL):
     
     return [row['tg_id'] for row in rows]
 
-async def insert_user(user_id, username, ref=0, pool=POOL):
+async def get_all_refs(user_id, pool=POOL):
     if user_id is None:
+        return
+    
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            rows = await conn.fetch(f'SELECT ref_id FROM "{SCHEMA}".users WHERE ref_id = $1', user_id)
+    
+    return [row['tg_id'] for row in rows]
+
+async def insert_user(user_id, username, ref=0, pool=POOL):
+    if user_id is None or username is None:
         return
     
     async with pool.acquire() as conn:
