@@ -6,7 +6,8 @@ import json
 import os
 
 from generate import get_key
-from database import insert_key_generation, get_pool, log_timestamp
+from database import insert_key_generation, log_timestamp
+from telegram import POOL
 
 # Function to load the JSON config asynchronously
 async def load_config(file_path):
@@ -26,13 +27,11 @@ async def new_key(session, game, api_token, pool):
         logging.error(f"Error generating key for {game}: {e}")
 
 async def main():
-    global POOL
     config = await load_config('config.json')
     api_token = config['API_TOKEN']
     events = [x for x in config['EVENTS']]
     limit = int(len(config['PROXY']) * 0.8)
     semaphore = asyncio.Semaphore(limit)
-    POOL = await get_pool()
 
     logging.basicConfig(level=logging.INFO,
                         filename=os.path.join('logs', log_timestamp() + '.log'),

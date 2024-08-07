@@ -53,7 +53,9 @@ async def insert_key_generation(user_id, key, key_type, used = True, pool=POOL):
             num = num['id']
             
             await conn.execute(f'INSERT INTO "{SCHEMA}".keys (user_id, key, time, type, used) '+ 
-                               'VALUES ($1, $2, $3, $4, $5) ', num, key, now(), key_type, used)
+                               'VALUES ($1, $2, $3, $4, $5) '+
+                               'ON CONFLICT (key) DO UPDATE SET used = EXCLUDED.used, user_id = EXCLUDED.user_id ', 
+                               num, key, now(), key_type, used)
 
 async def get_last_user_key(user_id, pool=POOL):
     if user_id is None:
@@ -67,6 +69,17 @@ async def get_last_user_key(user_id, pool=POOL):
             num = num['id']
             
             row = await conn.fetchrow(f'SELECT key, time, type FROM "{SCHEMA}".keys WHERE user_id = $1 ORDER BY time DESC LIMIT 1', num)
+    
+    return row
+
+
+async def get_unused_key_of_type(key_type, pool=POOL):
+    if key_type is None:
+        return
+    
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            row = await conn.fetchrow(f'SELECT key FROM "{SCHEMA}".keys WHERE type = $1 AND used = false ORDER BY time DESC LIMIT 1', key_type)
     
     return row
 
@@ -107,16 +120,21 @@ async def get_all_dev(pool=POOL):
     
     return [row['tg_id'] for row in rows]
 
-async def get_all_refs(user_id, pool=POOL):
+
+async def get_all_refs(user_id, pool):
     if user_id is None:
         return
+
+    query = f'SELECT ref_id FROM "{SCHEMA}".users WHERE ref_id = $1'
     
     async with pool.acquire() as conn:
-        async with conn.transaction():
-            rows = await conn.fetch(f'SELECT ref_id FROM "{SCHEMA}".users WHERE ref_id = $1', user_id)
-    
-    return [row['tg_id'] for row in rows]
+        # Directly fetch the results without explicit transaction (SELECT query doesn't need it)
+        rows = await conn.fetch(query, user_id)
 
+    # Extract the 'ref_id' values
+    ref_ids = [row['ref_id'] for row in rows]
+    return ref_ids
+    
 async def insert_user(user_id, username, ref=0, pool=POOL):
     if user_id is None or username is None:
         return
