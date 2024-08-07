@@ -1,18 +1,29 @@
 {
-    "API_TOKEN": "",
+    "API_TOKEN": "6567944149:AAE8bPXXugVGg67sqm5XNi4vcH2dSDLqoo4",
 
     "DB" : {
         "HOST": "127.0.0.1",
         "PORT": 5432,
         "USER": "postgres",
-        "PASSWORD": "",
+        "PASSWORD": "password",
         "NAME": "postgres",
-        "SCHEMA": "123",
+        "SCHEMA": "hamster-kombat-keys",
         "SSL": false
     },
 
     "SQLITE" : "sql/sqlite.db",
-    "PROXY": [],
+    "PROXY": [  
+                "http://leucois9ux-mobile-country-GB-state-6269131-city-2644210-hold-session-session-669150dcb2dc8:eThapYQvdMX5Tttn@93.190.138.107:9999",
+                "http://leucois9ux-mobile-country-GB-state-6269131-city-2641673-hold-session-session-669150ea5b3ca:eThapYQvdMX5Tttn@93.190.138.107:9999",
+                "http://leucois9ux-mobile-country-GB-state-6269131-city-2641170-hold-session-session-66915103a5803:eThapYQvdMX5Tttn@93.190.138.107:9999",
+                "http://leucois9ux-mobile-country-GB-state-6269131-city-2643123-hold-session-session-6691514c10fbc:eThapYQvdMX5Tttn@93.190.138.107:9999",
+                "http://leucois9ux-mobile-country-GB-state-6269131-city-2654993-hold-session-session-669152a4a998a:eThapYQvdMX5Tttn@93.190.138.107:9999",
+                "http://leucois9ux-mobile-country-GB-state-6269131-city-6545250-hold-session-session-669152b3be731:eThapYQvdMX5Tttn@93.190.138.107:9999",
+                "http://leucois9ux-mobile-country-GB-state-6269131-city-3333200-hold-session-session-669152c227078:eThapYQvdMX5Tttn@93.190.138.107:9999",
+                "http://leucois9ux-mobile-country-GB-state-6269131-city-2634812-hold-session-session-669152d1ae60b:eThapYQvdMX5Tttn@93.190.138.107:9999",
+                "http://leucois9ux-mobile-country-GB-state-6269131-city-2643743-hold-session-session-669153104265b:eThapYQvdMX5Tttn@93.190.138.107:9999",
+                "http://leucois9ux-mobile-country-GB-state-6269131-city-2644688-hold-session-session-6691531b21756:eThapYQvdMX5Tttn@93.190.138.107:9999"
+            ],
     "EVENTS":{
         "BIKE" : {
             "NAME" : "Bike Ride 3D",
