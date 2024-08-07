@@ -164,8 +164,10 @@ sqlite.db
 bot.log
 tempCodeRunnerFile.py
 reserve.json
+config.json
 #test.py
 
 #vs
 .vs/
 .vscode/
+config.json
