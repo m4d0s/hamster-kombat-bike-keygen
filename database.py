@@ -41,47 +41,63 @@ async def get_pool():
     return POOL
 
 
-async def insert_key_generation(user_id, key, key_type, used = True, pool=POOL):
+async def insert_key_generation(user_id, key, key_type, used=True, pool=None):
     if user_id is None or key is None:
         return
     
+    pool = pool or POOL
     async with pool.acquire() as conn:
         async with conn.transaction():
-            num = await conn.fetchrow(f'SELECT id FROM "{SCHEMA}".users WHERE tg_id = $1 ORDER BY id DESC LIMIT 1', user_id)
+            num = await conn.fetchrow(
+                f'SELECT id FROM "{SCHEMA}".users WHERE tg_id = $1 ORDER BY id DESC LIMIT 1',
+                user_id
+            )
             if num is None:
                 return None
             num = num['id']
             
-            await conn.execute(f'INSERT INTO "{SCHEMA}".keys (user_id, key, time, type, used) '+ 
-                               'VALUES ($1, $2, $3, $4, $5) '+
-                               'ON CONFLICT (key) DO UPDATE SET used = EXCLUDED.used, user_id = EXCLUDED.user_id ', 
-                               num, key, now(), key_type, used)
+            await conn.execute(
+                f'INSERT INTO "{SCHEMA}".keys (user_id, key, time, type, used) ' +
+                'VALUES ($1, $2, $3, $4, $5) ' +
+                'ON CONFLICT (key) DO UPDATE SET used = EXCLUDED.used, user_id = EXCLUDED.user_id',
+                num, key, now(), key_type, used
+            )
 
-async def get_last_user_key(user_id, pool=POOL):
+async def get_last_user_key(user_id, pool=None):
     if user_id is None:
         return
     
+    pool = pool or POOL
     async with pool.acquire() as conn:
         async with conn.transaction():
-            num = await conn.fetchrow(f'SELECT id FROM "{SCHEMA}".users WHERE tg_id = $1 ORDER BY id DESC LIMIT 1', user_id)
+            num = await conn.fetchrow(
+                f'SELECT id FROM "{SCHEMA}".users WHERE tg_id = $1 ORDER BY id DESC LIMIT 1',
+                user_id
+            )
             if num is None:
                 return None
             num = num['id']
             
-            row = await conn.fetchrow(f'SELECT key, time, type FROM "{SCHEMA}".keys WHERE user_id = $1 ORDER BY time DESC LIMIT 1', num)
+            row = await conn.fetchrow(
+                f'SELECT key, time, type FROM "{SCHEMA}".keys WHERE user_id = $1 ORDER BY time DESC LIMIT 1',
+                num
+            )
     
     return row
 
-
-async def get_unused_key_of_type(key_type, pool=POOL):
+async def get_unused_key_of_type(key_type, pool=None):
     if key_type is None:
         return
     
+    pool = pool or POOL
     async with pool.acquire() as conn:
         async with conn.transaction():
-            row = await conn.fetchrow(f'SELECT key FROM "{SCHEMA}".keys WHERE type = $1 AND used = false ORDER BY time DESC LIMIT 1', key_type)
+            row = await conn.fetchrow(
+                f'SELECT key FROM "{SCHEMA}".keys WHERE type = $1 AND used = false ORDER BY time DESC LIMIT 1',
+                key_type
+            )
     
-    return row
+    return row['key']
 
 async def get_all_user_keys_24h(user_id, day=0, pool=POOL):
     if user_id is None:
@@ -96,7 +112,7 @@ async def get_all_user_keys_24h(user_id, day=0, pool=POOL):
             
             rows = await conn.fetch(f'SELECT key, time, type FROM "{SCHEMA}".keys WHERE user_id = $1 AND time > $2 ORDER BY time DESC', num, now() - 86400 * (abs(day) + 1))
     
-    return rows
+    return [[row['key'], row['time'], row['type']] for row in rows]
 
 async def delete_user(user_id, pool=POOL):
     if user_id is None:
