@@ -1,2 +1,6 @@
 aiogram
-flask
+asyncpg
+quart
+psycopg2
+asyncpg
+hybercorn

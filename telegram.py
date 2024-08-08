@@ -1,140 +1,251 @@
 import logging
+import asyncio
+import aiohttp
+import json
+import re
+from io import BytesIO
+
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ParseMode
-from aiogram.utils.exceptions import MessageNotModified, MessageToDeleteNotFound, InvalidQueryID
-import asyncio
-import requests
-import json
-from generate import app, sleep, generate_loading_bar
-import threading
-from database import log_timestamp, insert_key_generation, get_last_user_key
-from database import relative_time, get_all_user_keys_24h, insert_user, format_remaining_time
+from aiogram.utils.exceptions import MessageNotModified, MessageToDeleteNotFound, InvalidQueryID, ChatNotFound, BotBlocked, MessageIsTooLong
 
-json_config = json.loads(open('config.json').read())
+from generate import generate_loading_bar, get_key, MAX_LOAD
+from database import (log_timestamp, insert_key_generation, get_last_user_key, get_all_dev, get_all_user_ids,
+                      get_unused_key_of_type, relative_time, get_all_user_keys_24h, insert_user, format_remaining_time, 
+                      delete_user, get_pool, get_all_refs)
+
+# Load configuration
+with open('config.json') as f:
+    json_config = json.load(f)
+
 API_TOKEN = json_config['API_TOKEN']
 DELAY = json_config['DELAY']
+DEBUG_KEY = json_config['DEBUG_KEY']
+POOL = None
 
-# Configure logging
 logging.basicConfig(level=logging.INFO, filename='logs/'+log_timestamp()+'.log', format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 # Initialize bot and dispatcher
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 
-FLASK_SERVER_URL = json_config['FLASK_SERVER']
-EVENTS_DELAY = json_config['EVENTS_DELAY'][1] if json_config['DEBUG'] else json_config['EVENTS_DELAY'][0]
+
 WELCOME = None
+LOADING = None
+REPORT = None
+process_completed = False
 
-async def run_periodically(interval, func, *args, **kwargs):
-    while True:
-        await func(*args, **kwargs)
-        await asyncio.sleep(interval)
+def html_back_escape(text):
+    return str(text).replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
 
-async def new_message(message:str, chat_id: int):
-    return await bot.send_message(text=message, chat_id=chat_id, parse_mode=ParseMode.HTML)
 
-@dp.message_handler(commands=['start'])
-async def send_welcome(message: types.Message):
-    global WELCOME
-    insert_user(message.from_user.id, message.from_user.username)
-    
-    today_keys = get_all_user_keys_24h(message.from_user.id)
-    inline_btn_generate = InlineKeyboardButton('Generate Key', callback_data='generate_key')  # type: ignore
-    inline_kb = InlineKeyboardMarkup().add(inline_btn_generate)
-    
-    if WELCOME:
-        await try_to_delete(chat_id=message.chat.id, message_id=WELCOME.message_id)
+async def new_message(message: str, chat_id: int):
+    return await bot.send_message(text=html_back_escape(message), chat_id=chat_id, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
 
-    text = f'<b>I\'m Hamster Bike Keygen Bot! (Beta)</b>\nYour id: <code>{message.from_user.id}</code>\n\n<b>Today you generate:</b>\n'
-    if today_keys:
-        text += '\n'.join([f'<code>{key}</code> ({format_remaining_time(key_time)})' for key, key_time in today_keys])
-    else:
-        text += '\n<i>No keys generated today</i>'
-    text += '\n\n<b>Your attempts today:</b> {}/5'.format(5 - len(today_keys) if today_keys else 5)
-    text += "\n<i>Click the button below to generate a key</i>"
-    text += "\n\n<i>!!! Bot now in beta version, on any bug or error please contact technical support or just try again</i>"
-
-    WELCOME = await bot.send_message(text=text, chat_id=message.chat.id, parse_mode=ParseMode.HTML, reply_markup=inline_kb)
-    
-    await try_to_delete(chat_id=message.chat.id, message_id=message.message_id)
 
 async def update_loadbar(message: types.Message):
+    global process_completed, loading
     while not process_completed:
-        text, i = generate_loading_bar()
-        await bot.edit_message_text("Generating key...\n" + text, message.chat.id, message.message_id, parse_mode=ParseMode.HTML)
+        text, loading = generate_loading_bar()
+        try:
+            await bot.edit_message_text("Generating key...\n" + text, message.chat.id, message.message_id, parse_mode=ParseMode.HTML)
+        except MessageNotModified:
+            pass
+        await asyncio.sleep(1)
+    text, loading = generate_loading_bar(loading=MAX_LOAD)
+    await bot.edit_message_text("Generating key...\n" + text, message.chat.id, message.message_id, parse_mode=ParseMode.HTML)
 
-loading_message = None
+
 async def try_to_delete(chat_id, message_id):
     try:
         await bot.delete_message(chat_id=chat_id, message_id=message_id)
     except MessageToDeleteNotFound:
         pass
-    
-@dp.callback_query_handler(lambda c: c.data == 'generate_key')
-async def process_callback_generate_key(callback_query: types.CallbackQuery):
+
+
+async def send_report_example(message: types.Message):
+    example = "[Buttons1][https://google.com]\n[Buttons2][https://t.me/hk_bike_bot]"
+    global REPORT
+    REPORT = await new_message("Reply a message to report on other users with buttons\n\n" + example, message.chat.id)
+    await try_to_delete(chat_id=message.chat.id, message_id=message.message_id)
+
+
+@dp.message_handler(commands=['report'])
+async def mass_report(message: types.Message):
+    devs = await get_all_dev(pool=POOL)
+    if message.chat.id not in devs:
+        return
+    await send_report_example(message)
+
+
+@dp.message_handler(lambda message: message.reply_to_message and message.reply_to_message.message_id == REPORT.message_id)
+async def report(message: types.Message):
+    devs = await get_all_dev(pool=POOL)
+    if message.chat.id not in devs:
+        return
+
+    keyboard = InlineKeyboardMarkup()
+    urls = re.findall(r'\[(.+?)\]\[(.+?)\]', message.text)
+    text_without_buttons = re.sub(r'\[(.+?)\]\[(.+?)\]', '', message.html_text).strip()
+
+    if urls:
+        for url_name, url in urls:
+            button = InlineKeyboardButton(text=url_name, url=url)
+            keyboard.add(button)
+
+    await send_to_all_users(text_without_buttons, keyboard)
+
+
+async def send_to_all_users(text: str, keyboard: InlineKeyboardMarkup):
+    user_ids = await get_all_user_ids(pool=POOL)
+    tasks = [send_message_to_user(user_id, text, keyboard) for user_id in user_ids]
+    await asyncio.gather(*tasks)
+
+
+async def send_message_to_user(user_id, text: str, keyboard: InlineKeyboardMarkup):
     try:
-        global process_completed
-        global loading_message
-        process_completed = False
-        await bot.answer_callback_query(callback_query.id)
-        last_user_key = get_last_user_key(callback_query.from_user.id)
-        today_keys = get_all_user_keys_24h(callback_query.from_user.id)
-        if today_keys is None:
-            today_keys = []
-        if loading_message:
-            await try_to_delete(chat_id=callback_query.from_user.id, message_id=loading_message.message_id)
-            loading_message = None
-        if not last_user_key or abs(relative_time(last_user_key[1])) > DELAY and not process_completed:
-            if len(today_keys) < 5:
-                loading_message = await new_message("Generating key...\nEstimated time: 2 minutes", callback_query.from_user.id)
-                
-                if WELCOME and loading_message.message_id - 1 != WELCOME.message_id:
-                    await try_to_delete(chat_id=callback_query.from_user.id, message_id=loading_message.message_id - 1)
-                try:
-                    # await asyncio.gather(asyncio.create_task(update_loadbar(loading_message)))
-                    response = requests.get(FLASK_SERVER_URL) #, params={'user_id': callback_query.from_user.id, 'message_id': loading_message.message_id})
-                    if response.status_code == 200 and response.text:
+        await bot.send_message(chat_id=user_id, text=html_back_escape(text), parse_mode=ParseMode.HTML, disable_web_page_preview=True, reply_markup=keyboard)
+    except ChatNotFound:
+        logging.warning(f'Chat with user {user_id} not found')
+        await delete_user(user_id, pool=POOL)
+    except BotBlocked:
+        logging.warning(f'Chat with user {user_id} blocked')
+        await delete_user(user_id, pool=POOL)
+
+
+async def update_welcome_message(message: types.Message, today_keys):
+    global WELCOME
+    inline_btn_generate = InlineKeyboardButton('Generate Key', callback_data='generate_menu')
+    inline_kb = InlineKeyboardMarkup().add(inline_btn_generate)
+    limit_keys = json_config['COUNT'] + len(await get_all_refs(pool=POOL, user_id=message.chat.id))
+    
+    def create_pseudo_file(content: str, filename: str = "keys.txt"):
+        pseudo_file = BytesIO()
+        pseudo_file.write(content.encode('utf-8'))
+        pseudo_file.seek(0)
+        pseudo_file.name = filename
+        return pseudo_file
+
+    if WELCOME:
+        await try_to_delete(chat_id=message.chat.id, message_id=WELCOME.message_id)
+
+    text1 =  f"<b>I'm Hamster Bike Keygen Bot! (Beta)</b>\nYour id: <code>{message.chat.id}</code>\n"
+    text1 += f"Your reflink: https://t.me/tonfastbot?start={message.chat.id}\n<i>Every ref get you +1 attempt</i>\n\n<b>Today you generate:</b>\n"
+    if today_keys:
+        text2 = '\n'.join([f'<b>{type}:</b> <code>{key}</code> ({format_remaining_time(key_time)})' for key, key_time, type in today_keys])
+    else:
+
+        text2 = '\n<i>No keys generated today</i>'
+    text3 = f'\n\n<b>Your attempts today:</b> {limit_keys - len(today_keys) if today_keys else limit_keys}/{limit_keys}'
+    text3 += "\n\n<i>!!! Bot now in beta version, on any bug or error please contact technical support or just try again</i>"
+    
+    text = text1 + text2 + text3
+    try:
+        WELCOME = await bot.send_message(text=text, chat_id=message.chat.id, parse_mode=ParseMode.HTML, reply_markup=inline_kb)
+    except MessageIsTooLong:
+        keys = '\n'.join([f'{format_remaining_time(key_time)}({type}): {key}' for key, key_time, type in today_keys])
+        pseudo_file = create_pseudo_file(keys)
+        text = text1 + ' <i>keys in file</i>' + text3
+        WELCOME = await bot.send_document(chat_id=message.chat.id, document=pseudo_file, caption=text, parse_mode=ParseMode.HTML, reply_markup=inline_kb)
+    await try_to_delete(chat_id=message.chat.id, message_id=message.message_id)
+
+
+@dp.callback_query_handler(lambda c: c.data == 'generate_menu')
+async def process_callback_generate_menu(callback_query: types.CallbackQuery):
+    global WELCOME
+    message = callback_query.message
+    today_keys = await get_all_user_keys_24h(callback_query.message.chat.id, pool=POOL)
+    limit_keys = json_config['COUNT'] + len(await get_all_refs(pool=POOL, user_id=callback_query.message.chat.id))
+    
+    if WELCOME:
+        await try_to_delete(chat_id=message.chat.id, message_id=WELCOME.message_id)
+    
+    text = f"<b>Now choose you game to generate:</b>\n"
+    text += f'\n<b>Your attempts today:</b> {limit_keys - len(today_keys) if today_keys else limit_keys}/{limit_keys}'
+    text += "\n\n<i>!!! Bot now in beta version, on any bug or error please contact technical support or just try again</i>"
+
+    keyboard = InlineKeyboardMarkup()
+    for type in json_config['EVENTS']:
+        inline_btn = InlineKeyboardButton(text=json_config['EVENTS'][type]['NAME'], callback_data=f'generate_key_{type}')
+        keyboard.add(inline_btn)
+
+    WELCOME = await bot.send_message(text=text, chat_id=message.chat.id, parse_mode=ParseMode.HTML, reply_markup=keyboard, disable_web_page_preview=True)
+    await try_to_delete(chat_id=message.chat.id, message_id=message.message_id)
+
+
+@dp.message_handler(commands=['start'])
+async def send_welcome(message: types.Message):
+    args = int(message.get_args()) if message.get_args() else 0
+    await insert_user(message.chat.id, message.from_user.username, ref=args, pool=POOL)
+    today_keys = await get_all_user_keys_24h(message.chat.id, pool=POOL)
+    await update_welcome_message(message, today_keys)
+
+
+@dp.callback_query_handler(lambda c: c.data.startswith('generate_key_'))
+async def generate_key(callback_query: types.CallbackQuery):
+    global process_completed, LOADING
+    process_completed = False
+    await bot.answer_callback_query(callback_query.id)
+    game_key = callback_query.data.split('_')[2]
+    limit_keys = json_config['COUNT'] + len(await get_all_refs(pool=POOL, user_id=callback_query.message.chat.id))
+
+    last_user_key = await get_last_user_key(callback_query.message.chat.id, pool=POOL)
+    today_keys = await get_all_user_keys_24h(callback_query.message.chat.id, pool=POOL) or []
+
+    if LOADING:
+        await try_to_delete(chat_id=callback_query.message.chat.id, message_id=LOADING.message_id)
+        LOADING = None
+
+    def can_generate_key():
+        return not last_user_key or abs(relative_time(last_user_key[1])) > DELAY
+
+    if can_generate_key() and not process_completed:
+        if len(today_keys) < limit_keys:
+            mins = json_config['EVENTS'][game_key]['EVENTS_DELAY'][0] * 15 // 60000 // 2
+            LOADING = await new_message(f"Generating key...\nEstimated time: ~{mins} minutes", callback_query.message.chat.id)
+            try:
+                key = await get_unused_key_of_type(game_key, pool=POOL)
+                if key is not None:
+                    await try_to_delete(LOADING.chat.id, LOADING.message_id)
+                    LOADING = await new_message(message=f"You lucky! You instantly get free key\nYour key: <code>{key}</code>", chat_id=callback_query.message.chat.id)
+                    await insert_key_generation(callback_query.message.chat.id, key, game_key, pool=POOL)
+                else:
+                    async with aiohttp.ClientSession() as session:
+                        key_task = asyncio.create_task(get_key(session, game_key))
+                        load_task = asyncio.create_task(update_loadbar(LOADING))
+                        tasks = [key_task, load_task]
+                        await asyncio.gather(*tasks)
+                        key = await key_task
+                        if key is None:
+                            await try_to_delete(LOADING.chat.id, LOADING.message_id)
+                            LOADING = await new_message("An error occurred while generating the key!\nPlease try again later or contact technical support", callback_query.message.chat.id)
+                        else:
+                            await try_to_delete(LOADING.chat.id, LOADING.message_id)
+                            await insert_key_generation(callback_query.message.chat.id, key, game_key, pool=POOL)
+                            LOADING = await new_message(f"Key generated: <code>{key}</code>", callback_query.message.chat.id)
                         process_completed = True
-                        text = f'Key generated succesfully!\nGenerated key: <code>{response.text}</code>'
-                        await bot.delete_message(chat_id=callback_query.from_user.id, message_id=loading_message.message_id)
-                        loading_message =await new_message(text, callback_query.from_user.id)
-                        insert_key_generation(callback_query.from_user.id, response.text)
-                    else:
-                        process_completed = True
-                        text = 'Failed to generate key!\n Retry generating or contact the technical support'
-                        await try_to_delete(chat_id=callback_query.from_user.id, message_id=loading_message.message_id)
-                        loading_message = await new_message(text, callback_query.from_user.id)
-                except Exception as e:
-                    process_completed = True
-                    logging.error(f'Error generating key!\n Error: {e}')
-                    text = "An error occurred while generating the key!\n Please try again later or contact the technical support"
-                    await try_to_delete(chat_id=callback_query.from_user.id, message_id=loading_message.message_id)
-                    loading_message = await new_message(text, callback_query.from_user.id)
-            else:
+            except Exception as e:
                 process_completed = True
-                text = "You have reached the limit of keys generated today.\n Please come back tomorrow."
-                if loading_message:
-                    await try_to_delete(chat_id=callback_query.from_user.id, message_id=loading_message.message_id)
-                loading_message = await new_message(text, callback_query.from_user.id)
-        elif not process_completed:
-            text = f'Wait until last key will be generated!'
-            error = await new_message(text, callback_query.from_user.id)
-            await asyncio.sleep(5000)
-            await try_to_delete(chat_id=callback_query.from_user.id, message_id=error.message_id)
+                logging.error(f'Error generating key! Error: {e.with_traceback(None)}')
+                text = "An error occurred while generating the key!\nPlease try again later or contact technical support"
+                await try_to_delete(chat_id=callback_query.message.chat.id, message_id=LOADING.message_id)
+                LOADING = await new_message(text, callback_query.message.chat.id)
         else:
             process_completed = True
-            text = f'Last generated key: <code>{last_user_key[0]}</code>\nNext can be generated in {60 - relative_time(last_user_key[1])} seconds'
-            loading_message = await new_message(text, callback_query.from_user.id)
-            if WELCOME and loading_message.message_id - 1 != WELCOME.message_id:
-                await try_to_delete(chat_id=callback_query.from_user.id, message_id=loading_message.message_id - 1)
+            text = "You have reached the limit of keys generated today.\nPlease come back tomorrow."
+            if LOADING:
+                await try_to_delete(chat_id=callback_query.message.chat.id, message_id=LOADING.message_id)
+            LOADING = await new_message(text, callback_query.message.chat.id)
+    else:
+        process_completed = True
+        text = f'Last generated key: <code>{last_user_key[0]}</code>\nNext can be generated in {60 - relative_time(last_user_key[1])} seconds'
+        LOADING = await new_message(text, callback_query.message.chat.id)
+        if WELCOME and LOADING.message_id - 1 != WELCOME.message_id:
+            await try_to_delete(chat_id=callback_query.message.chat.id, message_id=LOADING.message_id - 1)
 
-        message = callback_query.message
-        message.from_user = callback_query.from_user
-        await asyncio.sleep(1000)
-        await send_welcome(callback_query.message)
-    except InvalidQueryID:
-        await new_message('Make another call now, you request was expired\nJust press /start', callback_query.from_user.id)
+    await send_welcome(callback_query.message)
 
 if __name__ == '__main__':
-    threading.Thread(target=app.run, daemon=True).start()
+    POOL = asyncio.get_event_loop().run_until_complete(get_pool())
+    print('Bot started...')
     executor.start_polling(dp, skip_updates=True)
