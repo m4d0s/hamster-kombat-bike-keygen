@@ -7,16 +7,19 @@ from io import BytesIO
 
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ParseMode
-from aiogram.utils.exceptions import MessageNotModified, MessageToDeleteNotFound, InvalidQueryID, ChatNotFound, BotBlocked, MessageIsTooLong
+from aiogram.utils.exceptions import (MessageNotModified, MessageToDeleteNotFound, InvalidQueryID, 
+                                      ChatNotFound, BotBlocked, MessageIsTooLong, MessageToEditNotFound)
 
-from generate import generate_loading_bar, get_key, MAX_LOAD
+from generate import generate_loading_bar, get_key
 from database import (log_timestamp, insert_key_generation, get_last_user_key, get_all_dev, get_all_user_ids,
                       get_unused_key_of_type, relative_time, get_all_user_keys_24h, insert_user, format_remaining_time, 
-                      delete_user, get_pool, get_all_refs)
+                      delete_user, get_pool, get_all_refs, get_user, get_cashed_data, write_cashed_data, update_cashe_process)
 
 # Load configuration
 with open('config.json') as f:
     json_config = json.load(f)
+with open('localization.json') as f:
+    translate = json.load(f)
 
 API_TOKEN = json_config['API_TOKEN']
 DELAY = json_config['DELAY']
@@ -29,61 +32,173 @@ logging.basicConfig(level=logging.INFO, filename='logs/'+log_timestamp()+'.log',
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 
+cashe = {'user_id':0, 'welcome':0, 'loading':0, 'report':0, 'process':False}
 
-WELCOME = None
-LOADING = None
-REPORT = None
-process_completed = False
+async def get_cached_data(user_id):
+    config = await get_cashed_data(user_id, pool=POOL)
+    user = await get_user(user_id, pool=POOL)
+    
+    welcome = config['welcome'] if config else None
+    loading = config['loading'] if config else None
+    report = config['report'] if config else None
+    process = config['process'] if config else True
+    error = config['error'] if config else None
+    lang = user['lang'] if user else 'en'
+    right = user['right'] if user else None
+    
+    return welcome, loading, report, process, lang, right, error
+
+async def set_cached_data(user_id, welcome, loading, report, process, error):
+    await write_cashed_data(user_id, {'welcome': welcome, 
+                                      'loading': loading, 
+                                      'report': report, 
+                                      'process': process, 
+                                      'error': error}, pool=POOL)
 
 def html_back_escape(text):
     return str(text).replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
 
-
-async def new_message(message: str, chat_id: int):
-    return await bot.send_message(text=html_back_escape(message), chat_id=chat_id, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
-
-
-async def update_loadbar(message: types.Message):
-    global process_completed, loading
+async def update_loadbar(chat_id, game_key):
+    WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(chat_id) ##cashe
+    sec = json_config['EVENTS'][game_key]['EVENTS_DELAY'][1] * 15 // 1000
+    mins = json_config['EVENTS'][game_key]['EVENTS_DELAY'][1] * 15 // 60000 // 2
+    loading = 0
+    process_completed = False
+    await set_cached_data(chat_id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
     while not process_completed:
-        text, loading = generate_loading_bar()
+        text = generate_loading_bar(progress=loading, max=sec)
+        
+        time = translate[LANG]['generate_key'][0].replace('{mins}', str(mins))
+        plus_text = translate[LANG]['generate_key'][7].replace('{key}', game_key) if loading > sec else ''
+        full = time + '\n\n' + text + '\n' + plus_text
         try:
-            await bot.edit_message_text("Generating key...\n" + text, message.chat.id, message.message_id, parse_mode=ParseMode.HTML)
+            await try_to_edit(full, chat_id, LOADING)
         except MessageNotModified:
             pass
+        loading += 1
         await asyncio.sleep(1)
-    text, loading = generate_loading_bar(loading=MAX_LOAD)
-    await bot.edit_message_text("Generating key...\n" + text, message.chat.id, message.message_id, parse_mode=ParseMode.HTML)
+        WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(chat_id) ##cashe
+    process_completed = True
+    loading = sec
+    text = generate_loading_bar(progress=loading, max=mins)
+    full = time + '\n\n' + text
+    await try_to_edit(full, chat_id, LOADING)
+    await set_cached_data(chat_id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
 
+async def update_report(chat_id, text, keyboard):
+    WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(chat_id) ##cashe
+    loading = 0
+    max = await get_all_user_ids(pool=POOL)
+    max = len(max)
+    
+    user_ids = await get_all_user_ids(pool=POOL)
+    tasks = [asyncio.create_task(send_message_to_user(user_id, text, keyboard)) for user_id in user_ids]
+    # await asyncio.gather(*tasks)
+    process_completed = False
+    await set_cached_data(chat_id, WELCOME, LOADING, REPORT, process_completed)
+    while not process_completed:
+        text = generate_loading_bar(progress=loading, max=max)
+        loading = len([x for x in tasks if x.done()])
+        if loading == max:
+            process_completed = True
+            break
+        time = translate[LANG]['update_report'][0].replace('{mins}', str(max))
+        full = time + f'\n{loading}/{max}' + '\n\n' + text
+        try:
+            await try_to_edit(full, chat_id, REPORT)
+        except MessageNotModified:
+            pass
+        loading += 1
+        await asyncio.sleep(1)
+    await set_cached_data(chat_id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
 
 async def try_to_delete(chat_id, message_id):
     try:
         await bot.delete_message(chat_id=chat_id, message_id=message_id)
+        return True
     except MessageToDeleteNotFound:
-        pass
+        return False
+    
+async def try_to_edit(text, chat_id, message_id):
+    try:
+        await bot.edit_message_text(text, chat_id, message_id, parse_mode=ParseMode.HTML)
+        return True
+    except MessageToEditNotFound:
+        return False
+    
+    
+async def send_error_message(chat_id, message, e = None):
+    WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(chat_id) ##cashe
+    process_completed = True
+    if ERROR:
+        await try_to_delete(chat_id, ERROR)
+    logging.error(f'Error generating key! Error: {e.with_traceback(e.__traceback__)}')
+    ERROR_MESS = await new_message(message, chat_id)
+    ERROR = ERROR_MESS.message_id
+    await set_cached_data(message.chat.id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
+    return ERROR_MESS
+    
+async def new_message(message: str, chat_id: int):
+    return await bot.send_message(text=html_back_escape(message), chat_id=chat_id, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
 
 
-async def send_report_example(message: types.Message):
-    example = "[Buttons1][https://google.com]\n[Buttons2][https://t.me/hk_bike_bot]"
-    global REPORT
-    REPORT = await new_message("Reply a message to report on other users with buttons\n\n" + example, message.chat.id)
+@dp.message_handler(commands=['start'])
+async def send_language_choose(message: types.Message):
+    WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(message.chat.id) ##cashe
+    user = await get_user(message.chat.id, pool=POOL)
+    if not user:
+        text = f"{translate[LANG]['send_language_choose'][0]}\n"
+        keyboard = InlineKeyboardMarkup(row_width=2)
+        for x in translate:
+            inline_btn = InlineKeyboardButton(text=translate[x]["NAME"], callback_data=f'lang_{x}_{message.get_args()}')
+            keyboard.add(inline_btn)
+        WELCOME_MESS = await bot.send_message(text=text, chat_id=message.chat.id, parse_mode=ParseMode.HTML, reply_markup=keyboard)
+        WELCOME = WELCOME_MESS.message_id
+    else:
+        await send_welcome(message)
+        await insert_user(message.chat.id, message.from_user.username, ref=user['ref'], lang=LANG,  pool=POOL)
     await try_to_delete(chat_id=message.chat.id, message_id=message.message_id)
+    await set_cached_data(message.chat.id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
 
+@dp.callback_query_handler(lambda c: c.data and c.data.startswith('lang_'))
+async def process_callback_language(callback_query: types.CallbackQuery):
+    data = callback_query.data
+    LANG = data.split('_')[1]
+    ref = int(data.split('_')[2]) if data.split('_')[2] and data.split('_')[2].isdigit() and int(data.split('_')[2]) != callback_query.message.chat.id else 0
+    await try_to_delete(chat_id=callback_query.message.chat.id, message_id=callback_query.message.message_id)
+    await insert_user(callback_query.message.chat.id, callback_query.from_user.username, ref=ref, lang=LANG, pool=POOL)
+    await send_welcome(callback_query.message)
 
+async def send_welcome(message: types.Message):
+    today_keys = await get_all_user_keys_24h(message.chat.id, pool=POOL)
+    await update_welcome_message(message, today_keys)
+    
 @dp.message_handler(commands=['report'])
 async def mass_report(message: types.Message):
+    WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(message.chat.id) ##cashe
     devs = await get_all_dev(pool=POOL)
-    if message.chat.id not in devs:
+    if message.chat.id not in devs and not process_completed:
         return
     await send_report_example(message)
 
+async def send_report_example(message: types.Message):
+    WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(message.chat.id) ##cashe
+    example = "[Buttons1][https://google.com]\n[Buttons2][https://t.me/hk_bike_bot]"
+    REPORT_MESS = await new_message(f"{translate[LANG]['send_report_example'][0]}\n\n" + example, message.chat.id)
+    REPORT = REPORT_MESS.message_id
+    await try_to_delete(chat_id=message.chat.id, message_id=message.message_id)
+    await set_cached_data(message.chat.id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
 
-@dp.message_handler(lambda message: message.reply_to_message and message.reply_to_message.message_id == REPORT.message_id)
+
+@dp.message_handler(lambda message: message.reply_to_message)
 async def report(message: types.Message):
+    WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(message.chat.id) ##cashe
+    if not message.reply_to_message.message_id == REPORT or not process_completed:
+        return
     devs = await get_all_dev(pool=POOL)
     if message.chat.id not in devs:
         return
-
+    process_completed = False
     keyboard = InlineKeyboardMarkup()
     urls = re.findall(r'\[(.+?)\]\[(.+?)\]', message.text)
     text_without_buttons = re.sub(r'\[(.+?)\]\[(.+?)\]', '', message.html_text).strip()
@@ -92,32 +207,30 @@ async def report(message: types.Message):
         for url_name, url in urls:
             button = InlineKeyboardButton(text=url_name, url=url)
             keyboard.add(button)
-
-    await send_to_all_users(text_without_buttons, keyboard)
-
-
-async def send_to_all_users(text: str, keyboard: InlineKeyboardMarkup):
-    user_ids = await get_all_user_ids(pool=POOL)
-    tasks = [send_message_to_user(user_id, text, keyboard) for user_id in user_ids]
-    await asyncio.gather(*tasks)
+    await set_cached_data(message.chat.id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
+    await update_report(message.message_id, text_without_buttons, keyboard)
+    await set_cached_data(message.chat.id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
 
 
 async def send_message_to_user(user_id, text: str, keyboard: InlineKeyboardMarkup):
+    WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(user_id) ##cashe
     try:
         await bot.send_message(chat_id=user_id, text=html_back_escape(text), parse_mode=ParseMode.HTML, disable_web_page_preview=True, reply_markup=keyboard)
     except ChatNotFound:
-        logging.warning(f'Chat with user {user_id} not found')
+        logging.warning(f"{translate[LANG]['send_message_to_user'][0].replace('{user_id}', str(user_id))}")
         await delete_user(user_id, pool=POOL)
     except BotBlocked:
-        logging.warning(f'Chat with user {user_id} blocked')
+        logging.warning(f"{translate[LANG]['send_message_to_user'][1].replace('{user_id}', str(user_id))}")
         await delete_user(user_id, pool=POOL)
+    await set_cached_data(user_id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
 
 
 async def update_welcome_message(message: types.Message, today_keys):
-    global WELCOME
-    inline_btn_generate = InlineKeyboardButton('Generate Key', callback_data='generate_menu')
+    WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(message.chat.id) ##cashe
+    inline_btn_generate = InlineKeyboardButton(translate[LANG]['update_welcome_message'][0], callback_data='generate_menu')
     inline_kb = InlineKeyboardMarkup().add(inline_btn_generate)
-    limit_keys = json_config['COUNT'] + len(await get_all_refs(pool=POOL, user_id=message.chat.id))
+    refs = await get_all_refs(pool=POOL, user_id=message.chat.id)
+    limit_keys = json_config['COUNT'] + len(refs)
     
     def create_pseudo_file(content: str, filename: str = "keys.txt"):
         pseudo_file = BytesIO()
@@ -127,64 +240,63 @@ async def update_welcome_message(message: types.Message, today_keys):
         return pseudo_file
 
     if WELCOME:
-        await try_to_delete(chat_id=message.chat.id, message_id=WELCOME.message_id)
+        await try_to_delete(chat_id=message.chat.id, message_id=WELCOME)
 
-    text1 =  f"<b>I'm Hamster Bike Keygen Bot! (Beta)</b>\nYour id: <code>{message.chat.id}</code>\n"
-    text1 += f"Your reflink: https://t.me/tonfastbot?start={message.chat.id}\n<i>Every ref get you +1 attempt</i>\n\n<b>Today you generate:</b>\n"
+    text1 =  translate[LANG]['update_welcome_message'][1].replace('{message.chat.id}', str(message.chat.id))
+    text1 += translate[LANG]['update_welcome_message'][2].replace('{message.chat.id}', str(message.chat.id))
     if today_keys:
         text2 = '\n'.join([f'<b>{type}:</b> <code>{key}</code> ({format_remaining_time(key_time)})' for key, key_time, type in today_keys])
     else:
 
-        text2 = '\n<i>No keys generated today</i>'
-    text3 = f'\n\n<b>Your attempts today:</b> {limit_keys - len(today_keys) if today_keys else limit_keys}/{limit_keys}'
-    text3 += "\n\n<i>!!! Bot now in beta version, on any bug or error please contact technical support or just try again</i>"
+        text2 = translate[LANG]['update_welcome_message'][3]
+    text3 = f'\n\n<b>{translate[LANG]["update_welcome_message"][4]}</b> {limit_keys - len(today_keys) if today_keys else limit_keys}/{limit_keys}'
+    text3 += translate[LANG]['update_welcome_message'][5]
     
     text = text1 + text2 + text3
     try:
-        WELCOME = await bot.send_message(text=text, chat_id=message.chat.id, parse_mode=ParseMode.HTML, reply_markup=inline_kb)
+        WELCOME_MESS = await bot.send_message(text=text, chat_id=message.chat.id, parse_mode=ParseMode.HTML, reply_markup=inline_kb)
+        WELCOME = WELCOME_MESS.message_id
     except MessageIsTooLong:
         keys = '\n'.join([f'{format_remaining_time(key_time)}({type}): {key}' for key, key_time, type in today_keys])
         pseudo_file = create_pseudo_file(keys)
-        text = text1 + ' <i>keys in file</i>' + text3
-        WELCOME = await bot.send_document(chat_id=message.chat.id, document=pseudo_file, caption=text, parse_mode=ParseMode.HTML, reply_markup=inline_kb)
+        text = text1 + f" <i>{translate[LANG]['update_welcome_message'][6]}</i>" + text3
+        WELCOME_MESS = await bot.send_document(chat_id=message.chat.id, document=pseudo_file, caption=text, parse_mode=ParseMode.HTML, reply_markup=inline_kb)
+        WELCOME = WELCOME_MESS.message_id
     await try_to_delete(chat_id=message.chat.id, message_id=message.message_id)
+    
+    await set_cached_data(message.chat.id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
 
 
 @dp.callback_query_handler(lambda c: c.data == 'generate_menu')
 async def process_callback_generate_menu(callback_query: types.CallbackQuery):
-    global WELCOME
+    WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(callback_query.message.chat.id) ##cashe
     message = callback_query.message
     today_keys = await get_all_user_keys_24h(callback_query.message.chat.id, pool=POOL)
     limit_keys = json_config['COUNT'] + len(await get_all_refs(pool=POOL, user_id=callback_query.message.chat.id))
     
     if WELCOME:
-        await try_to_delete(chat_id=message.chat.id, message_id=WELCOME.message_id)
+        await try_to_delete(chat_id=message.chat.id, message_id=WELCOME)
     
-    text = f"<b>Now choose you game to generate:</b>\n"
-    text += f'\n<b>Your attempts today:</b> {limit_keys - len(today_keys) if today_keys else limit_keys}/{limit_keys}'
-    text += "\n\n<i>!!! Bot now in beta version, on any bug or error please contact technical support or just try again</i>"
+    text = translate[LANG]['process_callback_generate_menu'][0]
+    text += f"\n<b>{translate[LANG]['process_callback_generate_menu'][1]}</b> {limit_keys - len(today_keys) if today_keys else limit_keys}/{limit_keys}"
+    text += translate[LANG]['process_callback_generate_menu'][2]
 
     keyboard = InlineKeyboardMarkup()
     for type in json_config['EVENTS']:
         inline_btn = InlineKeyboardButton(text=json_config['EVENTS'][type]['NAME'], callback_data=f'generate_key_{type}')
         keyboard.add(inline_btn)
 
-    WELCOME = await bot.send_message(text=text, chat_id=message.chat.id, parse_mode=ParseMode.HTML, reply_markup=keyboard, disable_web_page_preview=True)
+    WELCOME_MESS = await bot.send_message(text=text, chat_id=message.chat.id, parse_mode=ParseMode.HTML, reply_markup=keyboard, disable_web_page_preview=True)
+    WELCOME = WELCOME_MESS.message_id
     await try_to_delete(chat_id=message.chat.id, message_id=message.message_id)
+    
+    await set_cached_data(message.chat.id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
 
-
-@dp.message_handler(commands=['start'])
-async def send_welcome(message: types.Message):
-    args = int(message.get_args()) if message.get_args() else 0
-    await insert_user(message.chat.id, message.from_user.username, ref=args, pool=POOL)
-    today_keys = await get_all_user_keys_24h(message.chat.id, pool=POOL)
-    await update_welcome_message(message, today_keys)
 
 
 @dp.callback_query_handler(lambda c: c.data.startswith('generate_key_'))
 async def generate_key(callback_query: types.CallbackQuery):
-    global process_completed, LOADING
-    process_completed = False
+    WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(callback_query.message.chat.id) ##cashe
     await bot.answer_callback_query(callback_query.id)
     game_key = callback_query.data.split('_')[2]
     limit_keys = json_config['COUNT'] + len(await get_all_refs(pool=POOL, user_id=callback_query.message.chat.id))
@@ -192,60 +304,78 @@ async def generate_key(callback_query: types.CallbackQuery):
     last_user_key = await get_last_user_key(callback_query.message.chat.id, pool=POOL)
     today_keys = await get_all_user_keys_24h(callback_query.message.chat.id, pool=POOL) or []
 
-    if LOADING:
-        await try_to_delete(chat_id=callback_query.message.chat.id, message_id=LOADING.message_id)
+    if LOADING and process_completed:
+        await try_to_delete(chat_id=callback_query.message.chat.id, message_id=LOADING)
         LOADING = None
 
     def can_generate_key():
-        return not last_user_key or abs(relative_time(last_user_key[1])) > DELAY
+        return not last_user_key or abs(relative_time(last_user_key['time'])) > DELAY
 
-    if can_generate_key() and not process_completed:
+    if can_generate_key() and process_completed:
         if len(today_keys) < limit_keys:
             mins = json_config['EVENTS'][game_key]['EVENTS_DELAY'][0] * 15 // 60000 // 2
-            LOADING = await new_message(f"Generating key...\nEstimated time: ~{mins} minutes", callback_query.message.chat.id)
+            LOADING_MESS = await new_message(translate[LANG]['generate_key'][0].replace('{mins}', str(mins)), callback_query.message.chat.id)
+            LOADING = LOADING_MESS.message_id
+            await set_cached_data(callback_query.message.chat.id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
             try:
                 key = await get_unused_key_of_type(game_key, pool=POOL)
                 if key is not None:
-                    await try_to_delete(LOADING.chat.id, LOADING.message_id)
-                    LOADING = await new_message(message=f"You lucky! You instantly get free key\nYour key: <code>{key}</code>", chat_id=callback_query.message.chat.id)
+                    await try_to_delete(callback_query.message.chat.id, LOADING)
+                    LOADING_MESS = await new_message(message=translate[LANG]['generate_key'][1].replace('{key}', key), chat_id=callback_query.message.chat.id)
+                    LOADING = LOADING_MESS.message_id
+                    await set_cached_data(callback_query.message.chat.id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
                     await insert_key_generation(callback_query.message.chat.id, key, game_key, pool=POOL)
                 else:
                     async with aiohttp.ClientSession() as session:
-                        key_task = asyncio.create_task(get_key(session, game_key))
-                        load_task = asyncio.create_task(update_loadbar(LOADING))
-                        tasks = [key_task, load_task]
-                        await asyncio.gather(*tasks)
-                        key = await key_task
+                        process_completed = False
+                        load_task = asyncio.create_task(update_loadbar(callback_query.message.chat.id, game_key))
+                        await set_cached_data(callback_query.message.chat.id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
+                        key = await get_key(session, game_key)
+                        load_task.cancel()
+                        process_completed = True
                         if key is None:
-                            await try_to_delete(LOADING.chat.id, LOADING.message_id)
-                            LOADING = await new_message("An error occurred while generating the key!\nPlease try again later or contact technical support", callback_query.message.chat.id)
+                            await try_to_delete(callback_query.message.chat.id, LOADING)
+                            LOADING_MESS = await new_message(translate[LANG]['generate_key'][2], callback_query.message.chat.id)
+                            LOADING = LOADING_MESS.message_id
+                            await set_cached_data(callback_query.message.chat.id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
                         else:
-                            await try_to_delete(LOADING.chat.id, LOADING.message_id)
+                            await try_to_delete(callback_query.message.chat.id, LOADING)
                             await insert_key_generation(callback_query.message.chat.id, key, game_key, pool=POOL)
-                            LOADING = await new_message(f"Key generated: <code>{key}</code>", callback_query.message.chat.id)
+                            LOADING_MESS = await new_message(translate[LANG]['generate_key'][3].replace('{key}', key), callback_query.message.chat.id)
+                            LOADING = LOADING_MESS.message_id
+                            await set_cached_data(callback_query.message.chat.id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
                         process_completed = True
             except Exception as e:
+                if LOADING:
+                    await try_to_delete(callback_query.message.chat.id, LOADING)
+                LOADING_MESS = await send_error_message(callback_query.message.chat.id, translate[LANG]['generate_key'][2], e)
                 process_completed = True
-                logging.error(f'Error generating key! Error: {e.with_traceback(None)}')
-                text = "An error occurred while generating the key!\nPlease try again later or contact technical support"
-                await try_to_delete(chat_id=callback_query.message.chat.id, message_id=LOADING.message_id)
-                LOADING = await new_message(text, callback_query.message.chat.id)
+                LOADING = LOADING_MESS.message_id
+                await set_cached_data(callback_query.message.chat.id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
         else:
             process_completed = True
-            text = "You have reached the limit of keys generated today.\nPlease come back tomorrow."
+            text = translate[LANG]['generate_key'][4]
             if LOADING:
-                await try_to_delete(chat_id=callback_query.message.chat.id, message_id=LOADING.message_id)
-            LOADING = await new_message(text, callback_query.message.chat.id)
-    else:
-        process_completed = True
-        text = f'Last generated key: <code>{last_user_key[0]}</code>\nNext can be generated in {60 - relative_time(last_user_key[1])} seconds'
-        LOADING = await new_message(text, callback_query.message.chat.id)
-        if WELCOME and LOADING.message_id - 1 != WELCOME.message_id:
-            await try_to_delete(chat_id=callback_query.message.chat.id, message_id=LOADING.message_id - 1)
-
+                await try_to_delete(chat_id=callback_query.message.chat.id, message_id=LOADING)
+            LOADING_MESS = await new_message(text, callback_query.message.chat.id)
+            LOADING = LOADING_MESS.message_id
+            await set_cached_data(callback_query.message.chat.id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
+    elif not can_generate_key():
+        text = translate[LANG]['generate_key'][5].replace('{last_user_key}', last_user_key[0]).replace('{relative_time}', str(60 - relative_time(last_user_key[1])))
+        LOADING_MESS = await new_message(text, callback_query.message.chat.id)
+        LOADING = LOADING_MESS.message_id
+        await set_cached_data(callback_query.message.chat.id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
+    elif not process_completed:
+        text = translate[LANG]['generate_key'][6]
+        ERROR_MESS = send_error_message(callback_query.message.chat.id, text, Exception('Process not completed'))
+        ERROR = ERROR_MESS.message_id
+        await set_cached_data(callback_query.message.chat.id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
+            
+    await set_cached_data(callback_query.message.chat.id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
     await send_welcome(callback_query.message)
 
 if __name__ == '__main__':
     POOL = asyncio.get_event_loop().run_until_complete(get_pool())
+    asyncio.get_event_loop().run_until_complete(update_cashe_process(POOL))
     print('Bot started...')
     executor.start_polling(dp, skip_updates=True)

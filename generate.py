@@ -26,7 +26,9 @@ users = [x for x in ALL_EVENTS]
 
 def generate_loading_bar(progress=loading, length=MAX_LOAD, max=MAX_LOAD):
     global loading, MAX_LOAD
-    text = '[' + '█' * int(progress / max * length) + '  ' * (20 - int(progress / max * length)) + ']' + f' {progress / max * 100:.2f}%'
+    text =  '[' + '▊' * int(progress / max * length if progress / max * length < length else length) +\
+                 '▁' * (length - int(progress / max * length) if progress / max * length < length else 0) +\
+            ']' + f' {progress / max * 100 if progress / max * 100 < 100 else 100:.2f}%'
     return text
 
 def delay_random():
