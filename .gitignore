@@ -165,6 +165,8 @@ bot.log
 tempCodeRunnerFile.py
 reserve.json
 config.json
+/references
+references/
 #test.py
 
 #vs
