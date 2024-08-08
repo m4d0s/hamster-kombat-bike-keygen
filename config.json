@@ -1,13 +1,60 @@
 {
-    "API_TOKEN": "7371621001:AAFT7rLDOxSsmobV4HjgOq1NPrDvqWbLmvw",
-    "FLASK_SERVER": "http://127.0.0.1:5000/keygen",
-    "DB_PATH": "sqlite.db",
+    "API_TOKEN": "6567944149:AAE8bPXXugVGg67sqm5XNi4vcH2dSDLqoo4",
 
-    "APP_TOKEN": "d28721be-fd2d-4b45-869e-9f253b554e50",
-    "PROMO_ID": "43e35910-c168-4634-ad4f-52fd764a843f",
-    "DELAY": 60,
+    "DB" : {
+        "HOST": "127.0.0.1",
+        "PORT": 5432,
+        "USER": "postgres",
+        "PASSWORD": "password",
+        "NAME": "postgres",
+        "SCHEMA": "hamster-kombat-keys",
+        "SSL": false
+    },
 
+    "SQLITE" : "sql/sqlite.db",
+    "PROXY": [  
+                "http://leucois9ux-mobile-country-GB-state-6269131-city-2644210-hold-session-session-669150dcb2dc8:eThapYQvdMX5Tttn@93.190.138.107:9999",
+                "http://leucois9ux-mobile-country-GB-state-6269131-city-2641673-hold-session-session-669150ea5b3ca:eThapYQvdMX5Tttn@93.190.138.107:9999",
+                "http://leucois9ux-mobile-country-GB-state-6269131-city-2641170-hold-session-session-66915103a5803:eThapYQvdMX5Tttn@93.190.138.107:9999",
+                "http://leucois9ux-mobile-country-GB-state-6269131-city-2643123-hold-session-session-6691514c10fbc:eThapYQvdMX5Tttn@93.190.138.107:9999",
+                "http://leucois9ux-mobile-country-GB-state-6269131-city-2654993-hold-session-session-669152a4a998a:eThapYQvdMX5Tttn@93.190.138.107:9999",
+                "http://leucois9ux-mobile-country-GB-state-6269131-city-6545250-hold-session-session-669152b3be731:eThapYQvdMX5Tttn@93.190.138.107:9999",
+                "http://leucois9ux-mobile-country-GB-state-6269131-city-3333200-hold-session-session-669152c227078:eThapYQvdMX5Tttn@93.190.138.107:9999",
+                "http://leucois9ux-mobile-country-GB-state-6269131-city-2634812-hold-session-session-669152d1ae60b:eThapYQvdMX5Tttn@93.190.138.107:9999",
+                "http://leucois9ux-mobile-country-GB-state-6269131-city-2643743-hold-session-session-669153104265b:eThapYQvdMX5Tttn@93.190.138.107:9999",
+                "http://leucois9ux-mobile-country-GB-state-6269131-city-2644688-hold-session-session-6691531b21756:eThapYQvdMX5Tttn@93.190.138.107:9999"
+            ],
+    "EVENTS":{
+        "BIKE" : {
+            "NAME" : "Bike Ride 3D",
+            "APP_TOKEN": "d28721be-fd2d-4b45-869e-9f253b554e50",
+            "PROMO_ID": "43e35910-c168-4634-ad4f-52fd764a843f",
+            "EVENTS_DELAY": [20000, 25000]
+        },
+        "CUBE" : {
+            "NAME": "Chain Cube 2048", 
+            "APP_TOKEN": "d1690a07-3780-4068-810f-9b5bbf2931b2",
+            "PROMO_ID": "b4170868-cef0-424f-8eb9-be0622e8e8e3",
+            "EVENTS_DELAY": [20000, 25000]
+        },
+        "TRAIN" : {
+            "NAME": "Train Miner",
+            "APP_TOKEN": "82647f43-3f87-402d-88dd-09a90025313f",
+            "PROMO_ID": "c4480ac7-e178-4973-8061-9ed5b2e17954",
+            "EVENTS_DELAY": [120000, 125000]
+        },
+        "CLONE" : {
+            "NAME": "My Clone Army",
+            "APP_TOKEN": "74ee0b5b-775e-4bee-974f-63e7f4d5bacb",
+            "PROMO_ID": "fe693b26-b342-4159-8808-15e3ff7f8767",
+            "EVENTS_DELAY": [120000, 125000]
+        }
+
+    },
+
+    "DELAY": 30,
+    "MAX_RETRY": 6,
+    "COUNT" : 5,
     "DEBUG": false,
-    "EVENTS_DELAY": [20.000, 0.350],
-    "DEBUG_KEY": "BIKE-TH1S-1S-JU5T-T35T"
+    "DEBUG_KEY": "CODE-TH1S-1S-JU5T-T35T"
 }
