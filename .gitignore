@@ -163,6 +163,7 @@ cython_debug/
 sqlite.db
 bot.log
 tempCodeRunnerFile.py
+
 reserve.json
 config.json
 #test.py
@@ -170,4 +171,3 @@ config.json
 #vs
 .vs/
 .vscode/
-config.json

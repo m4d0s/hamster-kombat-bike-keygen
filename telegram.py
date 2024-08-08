@@ -29,11 +29,11 @@ logging.basicConfig(level=logging.INFO, filename='logs/'+log_timestamp()+'.log',
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 
+
 WELCOME = None
 LOADING = None
 REPORT = None
 process_completed = False
-
 
 def html_back_escape(text):
     return str(text).replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
@@ -134,6 +134,7 @@ async def update_welcome_message(message: types.Message, today_keys):
     if today_keys:
         text2 = '\n'.join([f'<b>{type}:</b> <code>{key}</code> ({format_remaining_time(key_time)})' for key, key_time, type in today_keys])
     else:
+
         text2 = '\n<i>No keys generated today</i>'
     text3 = f'\n\n<b>Your attempts today:</b> {limit_keys - len(today_keys) if today_keys else limit_keys}/{limit_keys}'
     text3 += "\n\n<i>!!! Bot now in beta version, on any bug or error please contact technical support or just try again</i>"
