@@ -93,7 +93,7 @@ async def get_unused_key_of_type(key_type, pool=None):
     async with pool.acquire() as conn:
         async with conn.transaction():
             row = await conn.fetchrow(
-                f'SELECT key FROM "{SCHEMA}".keys WHERE type = $1 AND used = false ORDER BY time DESC LIMIT 1',
+                f'SELECT key FROM "{SCHEMA}".keys WHERE type = $1 AND used = false ORDER BY time ASC LIMIT 1',
                 key_type
             )
     
