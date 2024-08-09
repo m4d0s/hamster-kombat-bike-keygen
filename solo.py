@@ -2,38 +2,39 @@ import logging
 import asyncio
 import aiohttp
 import aiofiles
+import asyncpg
 import json
 import os
 
-from generate import get_key
+from generate import get_key, logger
 from database import insert_key_generation, log_timestamp
 from telegram import POOL
 
 # Function to load the JSON config asynchronously
-async def load_config(file_path):
+async def load_config(file_path:str):
     async with aiofiles.open(file_path, mode='r') as f:
         return json.loads(await f.read())
 
-async def new_key(session, game, api_token, pool):
-    logging.info(f"Generating new key for {game}")
+async def new_key(session:aiohttp.ClientSession, game:str, api_token:str, pool:asyncpg.Pool) -> None:
+    logger.info(f"Generating new key for {game}")
     try:
         key = await get_key(session, game)
         if key:
-            logging.info(f"Key for game {game} generated: {key}")
+            logger.info(f"Key for game {game} generated: {key}")
         else:
-            logging.warning(f"Failed to generate key for game {game}")
+            logger.warning(f"Failed to generate key for game {game}")
         await insert_key_generation(int(api_token.split(":")[0]), key, game, used=False, pool=pool)
     except Exception as e:
-        logging.error(f"Error generating key for {game}: {e}")
+        logger.error(f"Error generating key for {game}: {e}")
 
-async def main():
+async def main() -> None:
     config = await load_config('config.json')
     api_token = config['API_TOKEN']
     events = [x for x in config['EVENTS']]
     limit = load_config('config.json')['COUNT']
     semaphore = asyncio.Semaphore(limit)
 
-    logging.basicConfig(level=logging.INFO,
+    logger.basicConfig(level=logging.INFO,
                         filename=os.path.join('logs', log_timestamp() + '.log'),
                         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
@@ -43,7 +44,7 @@ async def main():
             tasks = []
             while len(tasks) < limit:
                 async with semaphore:
-                    tasks.append(new_key(session, events[i % len(events)], api_token, POOL))
+                    tasks.append(new_key(session, events[i % len(events)], api_token, pool=POOL))
                     i += 1
             await asyncio.gather(*tasks)
 

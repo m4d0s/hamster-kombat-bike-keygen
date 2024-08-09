@@ -6,9 +6,6 @@ from datetime import datetime
 def log_timestamp():
     return datetime.now().strftime('%Y-%m-%d')
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, filename='logs/'+log_timestamp()+'.log')
-
 # Load PostgreSQL configuration
 with open('config.json') as f:
     config = json.load(f)
@@ -28,7 +25,7 @@ POOL = None
 def now() -> int:
     return int(datetime.now().timestamp())
 
-async def get_pool():
+async def get_pool() -> asyncpg.Pool:
     global POOL
     POOL = await asyncpg.create_pool(
         database=db_config['database'],
@@ -40,11 +37,10 @@ async def get_pool():
     )
     return POOL
 
-async def insert_key_generation(user_id, key, key_type, used=True, pool=None):
-    if user_id is None or key is None:
+async def insert_key_generation(user_id:int, key:str, key_type:str, used=True, pool=POOL) -> None:
+    if user_id is None or key is None or key_type is None:
         return
     
-    pool = pool or POOL
     async with pool.acquire() as conn:
         async with conn.transaction():
             num = await conn.fetchrow(
@@ -62,11 +58,10 @@ async def insert_key_generation(user_id, key, key_type, used=True, pool=None):
                 num, key, now(), key_type, used
             )
 
-async def get_last_user_key(user_id, pool=None):
+async def get_last_user_key(user_id:int , pool=POOL) -> dict:
     if user_id is None:
         return
     
-    pool = pool or POOL
     async with pool.acquire() as conn:
         async with conn.transaction():
             num = await conn.fetchrow(
@@ -84,11 +79,10 @@ async def get_last_user_key(user_id, pool=None):
     
     return {'key': row['key'], 'time': row['time'], 'type': row['type']} if row else None
 
-async def get_unused_key_of_type(key_type, pool=None):
+async def get_unused_key_of_type(key_type:str, pool=POOL) -> str:
     if key_type is None:
         return
     
-    pool = pool or POOL
     async with pool.acquire() as conn:
         async with conn.transaction():
             row = await conn.fetchrow(
@@ -98,7 +92,7 @@ async def get_unused_key_of_type(key_type, pool=None):
     
     return row['key'] if row else None
 
-async def get_all_user_keys_24h(user_id, day=0, pool=POOL):
+async def get_all_user_keys_24h(user_id:id, day=0, pool=POOL) -> list:
     if user_id is None:
         return
     
@@ -113,7 +107,7 @@ async def get_all_user_keys_24h(user_id, day=0, pool=POOL):
     
     return [[row['key'], row['time'], row['type']] for row in rows] if rows else None
 
-async def delete_user(user_id, pool=POOL):
+async def delete_user(user_id: int, pool=POOL) -> None:
     if user_id is None:
         return
     
@@ -121,21 +115,21 @@ async def delete_user(user_id, pool=POOL):
         async with conn.transaction():
             await conn.execute(f'DELETE FROM "{SCHEMA}".users WHERE tg_id = $1', user_id)
 
-async def get_all_user_ids(pool=POOL):
+async def get_all_user_ids(pool=POOL) -> list:
     async with pool.acquire() as conn:
         async with conn.transaction():
             rows = await conn.fetch(f'SELECT tg_id FROM "{SCHEMA}".users')
     
     return [row['tg_id'] for row in rows] if rows else None
 
-async def get_all_dev(pool=POOL):
+async def get_all_dev(pool=POOL) -> list:
     async with pool.acquire() as conn:
         async with conn.transaction():
             rows = await conn.fetch(f'SELECT tg_id FROM "{SCHEMA}".users WHERE right > 0')
     
     return [row['tg_id'] for row in rows] if rows else None
 
-async def get_cashed_data(user_id, pool=POOL):
+async def get_cashed_data(user_id:int, pool=POOL) -> dict:
     if user_id is None:
         return
 
@@ -159,13 +153,13 @@ async def get_cashed_data(user_id, pool=POOL):
                    'error': rows[0]['error']} if rows else None
     return cashed_data
 
-async def update_cashe_process(pool=POOL):
+async def update_cashe_process(pool=POOL) -> None:
     query = f'UPDATE "{SCHEMA}".cashe SET process = true'
     async with pool.acquire() as conn:
         await conn.execute(query)
         
 
-async def write_cashed_data(user_id, cashed_data, pool=POOL):
+async def write_cashed_data(user_id:int, cashed_data: dict, pool=POOL) -> None:
     if user_id is None:
         return
 
@@ -202,7 +196,7 @@ async def write_cashed_data(user_id, cashed_data, pool=POOL):
                 await conn.execute(insert_query, user_id_in_db, *cashed_data.values())
 
 
-async def get_all_refs(user_id, pool):
+async def get_all_refs(user_id:int, pool) -> list:
     if user_id is None:
         return
 
@@ -216,7 +210,7 @@ async def get_all_refs(user_id, pool):
     ref_ids = [row['ref_id'] for row in rows] if rows else []
     return ref_ids
     
-async def insert_user(user_id, username, ref=0, lang='en', pool=POOL):
+async def insert_user(user_id:int, username:str, ref=0, lang='en', pool=POOL) -> int:
     if user_id is None or username is None:
         return
     
@@ -233,7 +227,7 @@ async def insert_user(user_id, username, ref=0, lang='en', pool=POOL):
             num = num['id']
             await conn.execute(f'INSERT INTO "{SCHEMA}".cashe (user_id) VALUES ($1) ON CONFLICT DO NOTHING', num)
 
-async def get_user(user_id, pool=POOL):
+async def get_user(user_id:int, pool=POOL) -> dict:
     if user_id is None:
         return
     

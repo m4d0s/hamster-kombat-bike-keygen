@@ -1,4 +1,3 @@
-import logging
 import asyncio
 import aiohttp
 import json
@@ -10,7 +9,7 @@ from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ParseMode
 from aiogram.utils.exceptions import (MessageNotModified, MessageToDeleteNotFound, InvalidQueryID, 
                                       ChatNotFound, BotBlocked, MessageIsTooLong, MessageToEditNotFound)
 
-from generate import generate_loading_bar, get_key
+from generate import generate_loading_bar, get_key, logger
 from database import (log_timestamp, insert_key_generation, get_last_user_key, get_all_dev, get_all_user_ids,
                       get_unused_key_of_type, relative_time, get_all_user_keys_24h, insert_user, format_remaining_time, 
                       delete_user, get_pool, get_all_refs, get_user, get_cashed_data, write_cashed_data, update_cashe_process)
@@ -26,15 +25,13 @@ DELAY = json_config['DELAY']
 DEBUG_KEY = json_config['DEBUG_KEY']
 POOL = None
 
-logging.basicConfig(level=logging.INFO, filename='logs/'+log_timestamp()+'.log', format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-
 # Initialize bot and dispatcher
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
 
 cashe = {'user_id':0, 'welcome':0, 'loading':0, 'report':0, 'process':False}
 
-async def get_cached_data(user_id):
+async def get_cached_data(user_id:int) -> tuple:
     config = await get_cashed_data(user_id, pool=POOL)
     user = await get_user(user_id, pool=POOL)
     
@@ -48,17 +45,17 @@ async def get_cached_data(user_id):
     
     return welcome, loading, report, process, lang, right, error
 
-async def set_cached_data(user_id, welcome, loading, report, process, error):
+async def set_cached_data(user_id:int, welcome:int, loading:int, report:int, process:bool, error:int) -> None:
     await write_cashed_data(user_id, {'welcome': welcome, 
                                       'loading': loading, 
                                       'report': report, 
                                       'process': process, 
                                       'error': error}, pool=POOL)
 
-def html_back_escape(text):
+def html_back_escape(text:str) -> str:
     return str(text).replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
 
-async def update_loadbar(chat_id, game_key):
+async def update_loadbar(chat_id:int, game_key:str) -> None:
     WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(chat_id) ##cashe
     sec = json_config['EVENTS'][game_key]['EVENTS_DELAY'][1] * 15 // 1000
     mins = json_config['EVENTS'][game_key]['EVENTS_DELAY'][1] * 15 // 60000 // 2
@@ -85,7 +82,7 @@ async def update_loadbar(chat_id, game_key):
     await try_to_edit(full, chat_id, LOADING)
     await set_cached_data(chat_id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
 
-async def update_report(chat_id, text, keyboard):
+async def update_report(chat_id:int, text:str, keyboard: InlineKeyboardMarkup) -> None:
     WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(chat_id) ##cashe
     loading = 0
     max = await get_all_user_ids(pool=POOL)
@@ -112,14 +109,16 @@ async def update_report(chat_id, text, keyboard):
         await asyncio.sleep(1)
     await set_cached_data(chat_id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
 
-async def try_to_delete(chat_id, message_id):
+async def try_to_delete(chat_id:int, message_id:int) -> bool:
+    message_id = message_id if message_id else 0
     try:
         await bot.delete_message(chat_id=chat_id, message_id=message_id)
         return True
     except MessageToDeleteNotFound:
         return False
     
-async def try_to_edit(text, chat_id, message_id):
+async def try_to_edit(text:str, chat_id:int, message_id:int) -> bool:
+    message_id = message_id if message_id else 0
     try:
         await bot.edit_message_text(text, chat_id, message_id, parse_mode=ParseMode.HTML)
         return True
@@ -127,23 +126,23 @@ async def try_to_edit(text, chat_id, message_id):
         return False
     
     
-async def send_error_message(chat_id, message, e = None):
+async def send_error_message(chat_id:int, message:str, e = Exception('')) -> types.Message:
     WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(chat_id) ##cashe
     process_completed = True
     if ERROR:
         await try_to_delete(chat_id, ERROR)
-    logging.error(f'Error generating key! Error: {e.with_traceback(e.__traceback__)}')
+    logger.error(f'Error generating key! Error: {e.with_traceback(e.__traceback__)}')
     ERROR_MESS = await new_message(message, chat_id)
     ERROR = ERROR_MESS.message_id
-    await set_cached_data(message.chat.id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
+    await set_cached_data(chat_id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
     return ERROR_MESS
     
-async def new_message(message: str, chat_id: int):
+async def new_message(message: str, chat_id: int) -> types.Message:
     return await bot.send_message(text=html_back_escape(message), chat_id=chat_id, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
 
 
 @dp.message_handler(commands=['start'])
-async def send_language_choose(message: types.Message):
+async def send_language_choose(message: types.Message) -> None:
     WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(message.chat.id) ##cashe
     user = await get_user(message.chat.id, pool=POOL)
     if not user:
@@ -161,7 +160,7 @@ async def send_language_choose(message: types.Message):
     await set_cached_data(message.chat.id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
 
 @dp.callback_query_handler(lambda c: c.data and c.data.startswith('lang_'))
-async def process_callback_language(callback_query: types.CallbackQuery):
+async def process_callback_language(callback_query: types.CallbackQuery) -> None:
     data = callback_query.data
     LANG = data.split('_')[1]
     ref = int(data.split('_')[2]) if data.split('_')[2] and data.split('_')[2].isdigit() and int(data.split('_')[2]) != callback_query.message.chat.id else 0
@@ -169,19 +168,19 @@ async def process_callback_language(callback_query: types.CallbackQuery):
     await insert_user(callback_query.message.chat.id, callback_query.from_user.username, ref=ref, lang=LANG, pool=POOL)
     await send_welcome(callback_query.message)
 
-async def send_welcome(message: types.Message):
+async def send_welcome(message: types.Message) -> None:
     today_keys = await get_all_user_keys_24h(message.chat.id, pool=POOL)
     await update_welcome_message(message, today_keys)
     
 @dp.message_handler(commands=['report'])
-async def mass_report(message: types.Message):
+async def mass_report(message: types.Message) -> None:
     WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(message.chat.id) ##cashe
     devs = await get_all_dev(pool=POOL)
     if message.chat.id not in devs and not process_completed:
         return
     await send_report_example(message)
 
-async def send_report_example(message: types.Message):
+async def send_report_example(message: types.Message) -> None:
     WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(message.chat.id) ##cashe
     example = "[Buttons1][https://google.com]\n[Buttons2][https://t.me/hk_bike_bot]"
     REPORT_MESS = await new_message(f"{translate[LANG]['send_report_example'][0]}\n\n" + example, message.chat.id)
@@ -191,7 +190,7 @@ async def send_report_example(message: types.Message):
 
 
 @dp.message_handler(lambda message: message.reply_to_message)
-async def report(message: types.Message):
+async def report(message: types.Message) -> None:
     WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(message.chat.id) ##cashe
     if not message.reply_to_message.message_id == REPORT or not process_completed:
         return
@@ -212,20 +211,20 @@ async def report(message: types.Message):
     await set_cached_data(message.chat.id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
 
 
-async def send_message_to_user(user_id, text: str, keyboard: InlineKeyboardMarkup):
+async def send_message_to_user(user_id:int, text: str, keyboard: InlineKeyboardMarkup) -> None:
     WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(user_id) ##cashe
     try:
         await bot.send_message(chat_id=user_id, text=html_back_escape(text), parse_mode=ParseMode.HTML, disable_web_page_preview=True, reply_markup=keyboard)
     except ChatNotFound:
-        logging.warning(f"{translate[LANG]['send_message_to_user'][0].replace('{user_id}', str(user_id))}")
+        logger.warning(f"{translate[LANG]['send_message_to_user'][0].replace('{user_id}', str(user_id))}")
         await delete_user(user_id, pool=POOL)
     except BotBlocked:
-        logging.warning(f"{translate[LANG]['send_message_to_user'][1].replace('{user_id}', str(user_id))}")
+        logger.warning(f"{translate[LANG]['send_message_to_user'][1].replace('{user_id}', str(user_id))}")
         await delete_user(user_id, pool=POOL)
     await set_cached_data(user_id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
 
 
-async def update_welcome_message(message: types.Message, today_keys):
+async def update_welcome_message(message: types.Message, today_keys:list) -> None:
     WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(message.chat.id) ##cashe
     inline_btn_generate = InlineKeyboardButton(translate[LANG]['update_welcome_message'][0], callback_data='generate_menu')
     inline_kb = InlineKeyboardMarkup().add(inline_btn_generate)
@@ -268,7 +267,7 @@ async def update_welcome_message(message: types.Message, today_keys):
 
 
 @dp.callback_query_handler(lambda c: c.data == 'generate_menu')
-async def process_callback_generate_menu(callback_query: types.CallbackQuery):
+async def process_callback_generate_menu(callback_query: types.CallbackQuery) -> None:
     WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(callback_query.message.chat.id) ##cashe
     message = callback_query.message
     today_keys = await get_all_user_keys_24h(callback_query.message.chat.id, pool=POOL)
@@ -295,7 +294,7 @@ async def process_callback_generate_menu(callback_query: types.CallbackQuery):
 
 
 @dp.callback_query_handler(lambda c: c.data.startswith('generate_key_'))
-async def generate_key(callback_query: types.CallbackQuery):
+async def generate_key(callback_query: types.CallbackQuery) -> None:
     WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(callback_query.message.chat.id) ##cashe
     await bot.answer_callback_query(callback_query.id)
     game_key = callback_query.data.split('_')[2]
@@ -361,7 +360,7 @@ async def generate_key(callback_query: types.CallbackQuery):
             LOADING = LOADING_MESS.message_id
             await set_cached_data(callback_query.message.chat.id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
     elif not can_generate_key():
-        text = translate[LANG]['generate_key'][5].replace('{last_user_key}', last_user_key[0]).replace('{relative_time}', str(60 - relative_time(last_user_key[1])))
+        text = translate[LANG]['generate_key'][5].replace('{last_user_key}', last_user_key['key']).replace('{relative_time}', str(60 - relative_time(last_user_key['time'])))
         LOADING_MESS = await new_message(text, callback_query.message.chat.id)
         LOADING = LOADING_MESS.message_id
         await set_cached_data(callback_query.message.chat.id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
@@ -372,10 +371,11 @@ async def generate_key(callback_query: types.CallbackQuery):
         await set_cached_data(callback_query.message.chat.id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
             
     await set_cached_data(callback_query.message.chat.id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
+    await try_to_delete(chat_id=callback_query.message.chat.id, message_id=WELCOME)
     await send_welcome(callback_query.message)
 
 if __name__ == '__main__':
     POOL = asyncio.get_event_loop().run_until_complete(get_pool())
     asyncio.get_event_loop().run_until_complete(update_cashe_process(POOL))
-    print('Bot started...')
+    logger.info('Telegram bot started...')
     executor.start_polling(dp, skip_updates=True)
