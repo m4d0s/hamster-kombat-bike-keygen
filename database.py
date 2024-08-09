@@ -55,7 +55,7 @@ async def insert_key_generation(user_id:int, key:str, key_type:str, used=True, p
             await conn.execute(
                 f'INSERT INTO "{SCHEMA}".keys (user_id, key, time, type, used) ' +
                 'VALUES ($1, $2, $3, $4, $5) ' +
-                'ON CONFLICT (key) DO UPDATE SET used = EXCLUDED.used, user_id = EXCLUDED.user_id',
+                'ON CONFLICT (key) DO UPDATE SET used = EXCLUDED.used, user_id = EXCLUDED.user_id, time = EXCLUDED.time',
                 num, key, now(), key_type, used
             )
 
@@ -126,7 +126,7 @@ async def get_all_user_ids(pool=POOL) -> list:
 async def get_all_dev(pool=POOL) -> list:
     async with pool.acquire() as conn:
         async with conn.transaction():
-            rows = await conn.fetch(f'SELECT tg_id FROM "{SCHEMA}".users WHERE right > 0')
+            rows = await conn.fetch(f'SELECT tg_id FROM "{SCHEMA}".users WHERE "right" > 0')
     
     return [row['tg_id'] for row in rows] if rows else None
 

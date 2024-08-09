@@ -6,7 +6,7 @@ from io import BytesIO
 
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ParseMode
-from aiogram.utils.exceptions import (MessageNotModified, MessageToDeleteNotFound, InvalidQueryID, 
+from aiogram.utils.exceptions import (MessageNotModified, MessageToDeleteNotFound, InvalidQueryID, ChatNotFound,
                                       ChatNotFound, BotBlocked, MessageIsTooLong, MessageToEditNotFound)
 
 from generate import generate_loading_bar, get_key, logger
@@ -82,19 +82,27 @@ async def update_loadbar(chat_id:int, game_key:str) -> None:
     await try_to_edit(full, chat_id, LOADING)
     await set_cached_data(chat_id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
 
-async def update_report(chat_id:int, text:str, keyboard: InlineKeyboardMarkup, users = None, warning = False) -> None:
+async def update_report(chat_id:int, text:str|dict, keyboard: InlineKeyboardMarkup = None, users = None, warning = False) -> None:
     WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(chat_id) ##cashe
     loading = 0
-    if not users:
+    if users is None:
         user_ids = await get_all_user_ids(pool=POOL)
     else:
+        if users == []:
+            return
         user_ids = users
     max = len(user_ids)
     
-    if warning:
-        tasks = [asyncio.create_task(send_error_message(user_id, text)) for user_id in user_ids]
-    else:
-        tasks = [asyncio.create_task(send_message_to_user(user_id, text, keyboard)) for user_id in user_ids]
+    tasks = []
+    for user_id in user_ids:
+        if type(text) is dict:
+            wel, loa, rep, pro, lang, ri, err = await get_cached_data(user_id) ##cashe
+            if lang in text.keys():
+                tasks.append(asyncio.create_task(send_message_to_user(user_id, text[lang], keyboard)))
+            else:
+                tasks.append(asyncio.create_task(send_message_to_user(user_id, text['default'], keyboard)))
+        else:
+            tasks.append(asyncio.create_task(send_message_to_user(user_id, text, keyboard)))
     # await asyncio.gather(*tasks)
     process_completed = False
     await set_cached_data(chat_id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
@@ -109,10 +117,17 @@ async def update_report(chat_id:int, text:str, keyboard: InlineKeyboardMarkup, u
         try:
             await try_to_edit(full, chat_id, REPORT)
         except MessageNotModified:
-            pass
+            logger.error(f'Message for report in chat {chat_id} not modified')
+        except BotBlocked:
+            await delete_user(user_id, pool=POOL)
+        except ChatNotFound:
+            await delete_user(user_id, pool=POOL)
         loading += 1
         await asyncio.sleep(1)
+    process_completed = True
     await set_cached_data(chat_id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
+
+
 
 async def try_to_delete(chat_id:int, message_id:int) -> bool:
     message_id = message_id if message_id else 0
@@ -130,7 +145,6 @@ async def try_to_edit(text:str, chat_id:int, message_id:int) -> bool:
     except MessageToEditNotFound:
         return False
     
-    
 async def send_error_message(chat_id:int, message:str, e = Exception('')) -> types.Message:
     WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(chat_id) ##cashe
     process_completed = True
@@ -144,6 +158,22 @@ async def send_error_message(chat_id:int, message:str, e = Exception('')) -> typ
     
 async def new_message(message: str, chat_id: int) -> types.Message:
     return await bot.send_message(text=html_back_escape(message), chat_id=chat_id, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+
+async def send_message_to_user(user_id:int, text: str, keyboard: InlineKeyboardMarkup) -> None:
+    bot_info = await bot.get_me()
+    if user_id == bot_info.id:
+        return
+    WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(user_id) ##cashe
+    try:
+        await bot.send_message(chat_id=user_id, text=html_back_escape(text), parse_mode=ParseMode.HTML, disable_web_page_preview=True, reply_markup=keyboard)
+    except ChatNotFound:
+        logger.warning(f"{translate[LANG]['send_message_to_user'][0].replace('{user_id}', str(user_id))}")
+        await delete_user(user_id, pool=POOL)
+    except BotBlocked:
+        logger.warning(f"{translate[LANG]['send_message_to_user'][1].replace('{user_id}', str(user_id))}")
+        await delete_user(user_id, pool=POOL)
+    await set_cached_data(user_id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
+
 
 
 @dp.message_handler(commands=['start'])
@@ -187,46 +217,68 @@ async def mass_report(message: types.Message) -> None:
 
 async def send_report_example(message: types.Message) -> None:
     WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(message.chat.id) ##cashe
-    example = "[Buttons1][https://google.com]\n[Buttons2][https://t.me/hk_bike_bot]"
-    REPORT_MESS = await new_message(f"{translate[LANG]['send_report_example'][0]}\n\n" + example, message.chat.id)
+    if REPORT:
+        await try_to_delete(chat_id=message.chat.id, message_id=REPORT)
+        REPORT = None
+    code_example = translate[LANG]['send_report_example'][2]
+    example = translate[LANG]['send_report_example'][3]
+    warning = f'\n\n{translate[LANG]["send_report_example"][1]}'
+    text = f"{translate[LANG]['send_report_example'][0]}\n\n"
+    REPORT_MESS = await new_message(text + code_example + example + warning, message.chat.id)
     REPORT = REPORT_MESS.message_id
     await try_to_delete(chat_id=message.chat.id, message_id=message.message_id)
     await set_cached_data(message.chat.id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
 
-
 @dp.message_handler(lambda message: message.reply_to_message)
 async def report(message: types.Message) -> None:
-    WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(message.chat.id) ##cashe
-    if not message.reply_to_message.message_id == REPORT or not process_completed:
+    WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(message.chat.id)
+    
+    if not process_completed:
+        text = translate[LANG]['generate_key'][6]
+        ERROR_MESS = await send_error_message(message.chat.id, text, Exception('Process not completed'))
+        ERROR = ERROR_MESS.message_id
+        await set_cached_data(message.chat.id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
+
+    # Проверяем, является ли ответом на нужное сообщение и завершен ли процесс
+    if message.reply_to_message.message_id != REPORT or not process_completed:
         return
+
+    # Получаем список разработчиков
     devs = await get_all_dev(pool=POOL)
     if message.chat.id not in devs:
         return
+
+    # Устанавливаем процесс как незавершенный
     process_completed = False
+    try_to_delete(chat_id=message.chat.id, message_id=message.message_id)
+
+    # Создаем клавиатуру и извлекаем URL и текст без кнопок
     keyboard = InlineKeyboardMarkup()
     urls = re.findall(r'\[(.+?)\]\[(.+?)\]', message.text)
     text_without_buttons = re.sub(r'\[(.+?)\]\[(.+?)\]', '', message.html_text).strip()
+    transl = re.findall(r'\<pre\>```(.+?)\n(.+?)\n```<\/pre\>', message.html_text)
 
+    # Обработка `transl`
+    if transl:
+        text_without_buttons = {}  # Перезаписываем text_without_buttons как словарь
+        first = True
+        for x in transl:
+            if first:
+                text_without_buttons['default'] = x[1]
+                first = False
+            text_without_buttons[x[0]] = x[1]
+
+    # Добавление кнопок, если есть URL
     if urls:
         for url_name, url in urls:
             button = InlineKeyboardButton(text=url_name, url=url)
             keyboard.add(button)
-    await set_cached_data(message.chat.id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
-    await update_report(message.message_id, text_without_buttons, keyboard)
-    await set_cached_data(message.chat.id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
 
+    # Сохранение обновленных данных в кэш
+    await set_cached_data(message.chat.id, WELCOME, LOADING, REPORT, process_completed, ERROR)
 
-async def send_message_to_user(user_id:int, text: str, keyboard: InlineKeyboardMarkup) -> None:
-    WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(user_id) ##cashe
-    try:
-        await bot.send_message(chat_id=user_id, text=html_back_escape(text), parse_mode=ParseMode.HTML, disable_web_page_preview=True, reply_markup=keyboard)
-    except ChatNotFound:
-        logger.warning(f"{translate[LANG]['send_message_to_user'][0].replace('{user_id}', str(user_id))}")
-        await delete_user(user_id, pool=POOL)
-    except BotBlocked:
-        logger.warning(f"{translate[LANG]['send_message_to_user'][1].replace('{user_id}', str(user_id))}")
-        await delete_user(user_id, pool=POOL)
-    await set_cached_data(user_id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
+    # Обновление отчета
+    await update_report(message.chat.id, text_without_buttons, keyboard)
 
 
 async def update_welcome_message(message: types.Message, today_keys:list) -> None:
@@ -249,6 +301,7 @@ async def update_welcome_message(message: types.Message, today_keys:list) -> Non
     text1 =  translate[LANG]['update_welcome_message'][1].replace('{message.chat.id}', str(message.chat.id))
     text1 += translate[LANG]['update_welcome_message'][2].replace('{message.chat.id}', str(message.chat.id))
     if today_keys:
+        today_keys = sorted(today_keys, key=lambda x: x[1], reverse=True)
         text2 = '\n'.join([f'<b>{type}:</b> <code>{key}</code> ({format_remaining_time(key_time)})' for key, key_time, type in today_keys])
     else:
 
@@ -383,10 +436,9 @@ if __name__ == '__main__':
     POOL = asyncio.get_event_loop().run_until_complete(get_pool())
     users_id = asyncio.get_event_loop().run_until_complete(update_cashe_process(POOL))
     logger.info("Send warning message to everyone who tried to generate key before....")
-    asyncio.get_event_loop().run_until_complete(update_report(json_config['FIRST_SETUP']['DEV'], 
-                                                "Bot now restarted, please generate key again (/start)\n\n"+\
-                                                "Бот перезапущен, пожалуйста, сгенеруйте ключ заново (/start)",
-                                                None, users_id))
+    text = {"ru": "Бот перезапущен, пожалуйста, сгенеруйте ключ заново (/start)", 
+            "en": "Bot now restarted, please generate key again (/start)"}
+    asyncio.get_event_loop().run_until_complete(update_report(json_config['FIRST_SETUP']['DEV'], text, None, users_id, True))
     
     logger.info('Telegram bot started...')
     executor.start_polling(dp, skip_updates=True)
