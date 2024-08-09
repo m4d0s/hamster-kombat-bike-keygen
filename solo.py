@@ -6,8 +6,8 @@ import asyncpg
 import json
 import os
 
-from generate import get_key, logger
-from database import insert_key_generation, log_timestamp
+from generate import get_key, get_logger
+from database import insert_key_generation, get_pool
 from telegram import POOL
 
 # Function to load the JSON config asynchronously
@@ -15,7 +15,7 @@ async def load_config(file_path:str):
     async with aiofiles.open(file_path, mode='r') as f:
         return json.loads(await f.read())
 
-async def new_key(session:aiohttp.ClientSession, game:str, api_token:str, pool:asyncpg.Pool) -> None:
+async def new_key(session:aiohttp.ClientSession, game:str, api_token:str, pool:asyncpg.Pool, logger:logging.Logger) -> None:
     logger.info(f"Generating new key for {game}")
     try:
         key = await get_key(session, game)
@@ -31,12 +31,10 @@ async def main() -> None:
     config = await load_config('config.json')
     api_token = config['API_TOKEN']
     events = [x for x in config['EVENTS']]
-    limit = load_config('config.json')['COUNT']
+    limit = int(len(config['PROXY']) * 0.8) 
     semaphore = asyncio.Semaphore(limit)
-
-    logger.basicConfig(level=logging.INFO,
-                        filename=os.path.join('logs', log_timestamp() + '.log'),
-                        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    logger = get_logger()
+    pool = await get_pool()
 
     async with aiohttp.ClientSession() as session:
         i = 0
@@ -44,7 +42,7 @@ async def main() -> None:
             tasks = []
             while len(tasks) < limit:
                 async with semaphore:
-                    tasks.append(new_key(session, events[i % len(events)], api_token, pool=POOL))
+                    tasks.append(new_key(session, events[i % len(events)], api_token, pool=pool, logger=logger))
                     i += 1
             await asyncio.gather(*tasks)
 

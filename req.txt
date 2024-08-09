@@ -1,6 +1,5 @@
 aiogram
 asyncpg
 quart
-psycopg2
 asyncpg
 hybercorn

@@ -18,15 +18,23 @@ loading, MAX_LOAD = 0, 15
 
 users = [x for x in ALL_EVENTS]
 
-def get_free_proxy():
-    for proxy in random.shuffle(PROXY_LIST):
-        # if not proxy['work']:
-            set_work_proxy(proxy)
-            return proxy['proxy']
-    return None
+def get_random_proxy():
+    global PROXY_LIST
+    return random.choice(PROXY_LIST)['proxy']
 
-def set_work_proxy(proxy, work = True):
-    PROXY_LIST[PROXY_LIST.index(proxy)]['work'] = work
+def get_free_proxy():
+    for proxy in PROXY_LIST:
+        if not proxy['work']:  # Проверяем, что прокси не работает
+            set_work_proxy(proxy['proxy'])
+            return proxy['proxy']
+    return get_random_proxy()
+
+def set_work_proxy(proxy:str, work=True):
+    for p in PROXY_LIST:
+        if p['proxy'] == proxy:  # Сравнение строки с полем 'proxy'
+            p['work'] = work
+            return
+    logger.warning(f"Прокси {proxy} не найден в списке.")
 
 def get_logger(file_level=logging.DEBUG, console_level=logging.DEBUG, base_level=logging.DEBUG):
     # Создаем логгер
@@ -83,7 +91,7 @@ async def delay(ms) -> None:
     logger.debug(f"Waiting {ms}ms")
     await asyncio.sleep(ms / 1000)
 
-async def fetch_api(session:aiohttp.ClientSession, path: str, body=None|dict, auth:str = None) -> dict:
+async def fetch_api(session:aiohttp.ClientSession, path: str, body:dict, auth:str = None) -> dict:
     url = f'https://api.gamepromo.io{path}'
     headers = {}
 
@@ -97,12 +105,11 @@ async def fetch_api(session:aiohttp.ClientSession, path: str, body=None|dict, au
         logger.debug(f"Using proxy: {proxy}")
         data = await res.text()
 
-        if config['DEBUG']:
-            logger.debug(f'URL: {url}')
-            logger.debug(f'Headers: {headers}')
-            logger.debug(f'Body: {body}')
-            logger.debug(f'Response Status: {res.status}')
-            logger.debug(f'Response Body: {data}')
+        logger.debug(f'URL: {url}')
+        logger.debug(f'Headers: {headers}')
+        logger.debug(f'Body: {body}')
+        logger.debug(f'Response Status: {res.status}')
+        logger.debug(f'Response Body: {data}')
 
         if not res.ok:
             set_work_proxy(proxy, False)

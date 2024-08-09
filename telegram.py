@@ -65,7 +65,7 @@ async def update_loadbar(chat_id:int, game_key:str) -> None:
     while not process_completed:
         text = generate_loading_bar(progress=loading, max=sec)
         
-        time = translate[LANG]['generate_key'][0].replace('{mins}', 5)
+        time = translate[LANG]['generate_key'][0].replace('{mins}', '5')
         plus_text = translate[LANG]['generate_key'][7].replace('{key}', game_key) if loading > sec else ''
         full = time + '\n\n' + text + '\n' + plus_text
         try:

@@ -27,14 +27,15 @@ def now() -> int:
 
 async def get_pool() -> asyncpg.Pool:
     global POOL
-    POOL = await asyncpg.create_pool(
-        database=db_config['database'],
-        user=db_config['user'],
-        password=db_config['password'],
-        host=db_config['host'],
-        port=db_config['port'],
-        ssl=SSL_MODE
-    )
+    if POOL is None:
+        POOL = await asyncpg.create_pool(
+            database=db_config['database'],
+            user=db_config['user'],
+            password=db_config['password'],
+            host=db_config['host'],
+            port=db_config['port'],
+            ssl=SSL_MODE
+        )
     return POOL
 
 async def insert_key_generation(user_id:int, key:str, key_type:str, used=True, pool=POOL) -> None:
