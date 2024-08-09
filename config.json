@@ -8,10 +8,10 @@
 
     "DB" : {
         "HOST": "127.0.0.1",
-        "PORT": 5432,
-        "USER": "postgres",
-        "PASSWORD": "password",
-        "NAME": "postgres",
+        "PORT": 5433,
+        "USER": "myuser",
+        "PASSWORD": "7IBkzyuOraiK",
+        "NAME": "hamster",
         "SCHEMA": "hamster-kombat-keys",
         "SSL": false
     },
