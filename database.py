@@ -227,7 +227,11 @@ async def insert_user(user_id, username, ref=0, lang='en', pool=POOL):
                                'ON CONFLICT (tg_id) DO UPDATE '+
                                'SET tg_username = EXCLUDED.tg_username', 
                                user_id, username, ref, lang)
-            await conn.execute(f'INSERT INTO "{SCHEMA}".cashe (user_id) VALUES ($1) ON CONFLICT DO NOTHING', user_id)
+            num = await conn.fetchrow(f'SELECT id FROM "{SCHEMA}".users WHERE tg_id = $1 ORDER BY id DESC LIMIT 1', user_id)
+            if num is None:
+                return None
+            num = num['id']
+            await conn.execute(f'INSERT INTO "{SCHEMA}".cashe (user_id) VALUES ($1) ON CONFLICT DO NOTHING', num)
 
 async def get_user(user_id, pool=POOL):
     if user_id is None:
@@ -242,7 +246,8 @@ async def get_user(user_id, pool=POOL):
             'ref_id': row['ref_id'], 
             'lang': row['lang'], 
             'right': row['right'],
-            'ref': row['ref_id']} if row else None
+            'ref': row['ref_id'],
+            'id': row['id']} if row else None
 
 def relative_time(time):
     return now() - time

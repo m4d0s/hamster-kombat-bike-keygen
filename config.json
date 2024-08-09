@@ -1,5 +1,5 @@
 {
-    "API_TOKEN": "6567944149:AAE8bPXXugVGg67sqm5XNi4vcH2dSDLqoo4",
+    "API_TOKEN": "7371621001:AAF_Mw2UGgZQ_zTCJYQcLFmi54pIlLfy9Rc",
 
     "DB" : {
         "HOST": "127.0.0.1",
@@ -54,7 +54,7 @@
 
     "DELAY": 30,
     "MAX_RETRY": 6,
-    "COUNT" : 5,
+    "COUNT" : 16,
     "DEBUG": false,
     "DEBUG_KEY": "CODE-TH1S-1S-JU5T-T35T"
 }

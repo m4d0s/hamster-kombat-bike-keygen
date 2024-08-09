@@ -30,7 +30,7 @@ async def main():
     config = await load_config('config.json')
     api_token = config['API_TOKEN']
     events = [x for x in config['EVENTS']]
-    limit = int(len(config['PROXY']) * 0.8)
+    limit = load_config('config.json')['COUNT']
     semaphore = asyncio.Semaphore(limit)
 
     logging.basicConfig(level=logging.INFO,

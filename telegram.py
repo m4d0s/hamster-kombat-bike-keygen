@@ -367,7 +367,7 @@ async def generate_key(callback_query: types.CallbackQuery):
         await set_cached_data(callback_query.message.chat.id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
     elif not process_completed:
         text = translate[LANG]['generate_key'][6]
-        ERROR_MESS = send_error_message(callback_query.message.chat.id, text, Exception('Process not completed'))
+        ERROR_MESS = await send_error_message(callback_query.message.chat.id, text, Exception('Process not completed'))
         ERROR = ERROR_MESS.message_id
         await set_cached_data(callback_query.message.chat.id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
             
