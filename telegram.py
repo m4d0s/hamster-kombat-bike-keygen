@@ -82,17 +82,22 @@ async def update_loadbar(chat_id:int, game_key:str) -> None:
     await try_to_edit(full, chat_id, LOADING)
     await set_cached_data(chat_id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
 
-async def update_report(chat_id:int, text:str, keyboard: InlineKeyboardMarkup) -> None:
+async def update_report(chat_id:int, text:str, keyboard: InlineKeyboardMarkup, users = None, warning = False) -> None:
     WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(chat_id) ##cashe
     loading = 0
-    max = await get_all_user_ids(pool=POOL)
-    max = len(max)
+    if not users:
+        user_ids = await get_all_user_ids(pool=POOL)
+    else:
+        user_ids = users
+    max = len(user_ids)
     
-    user_ids = await get_all_user_ids(pool=POOL)
-    tasks = [asyncio.create_task(send_message_to_user(user_id, text, keyboard)) for user_id in user_ids]
+    if warning:
+        tasks = [asyncio.create_task(send_error_message(user_id, text)) for user_id in user_ids]
+    else:
+        tasks = [asyncio.create_task(send_message_to_user(user_id, text, keyboard)) for user_id in user_ids]
     # await asyncio.gather(*tasks)
     process_completed = False
-    await set_cached_data(chat_id, WELCOME, LOADING, REPORT, process_completed)
+    await set_cached_data(chat_id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
     while not process_completed:
         text = generate_loading_bar(progress=loading, max=max)
         loading = len([x for x in tasks if x.done()])
@@ -376,6 +381,12 @@ async def generate_key(callback_query: types.CallbackQuery) -> None:
 
 if __name__ == '__main__':
     POOL = asyncio.get_event_loop().run_until_complete(get_pool())
-    asyncio.get_event_loop().run_until_complete(update_cashe_process(POOL))
+    users_id = asyncio.get_event_loop().run_until_complete(update_cashe_process(POOL))
+    logger.info("Send warning message to everyone who tried to generate key before....")
+    asyncio.get_event_loop().run_until_complete(update_report(json_config['FIRST_SETUP']['DEV'], 
+                                                "Bot now restarted, please generate key again (/start)\n\n"+\
+                                                "Бот перезапущен, пожалуйста, сгенеруйте ключ заново (/start)",
+                                                None, users_id))
+    
     logger.info('Telegram bot started...')
     executor.start_polling(dp, skip_updates=True)

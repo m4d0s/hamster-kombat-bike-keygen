@@ -154,10 +154,37 @@ async def get_cashed_data(user_id:int, pool=POOL) -> dict:
                    'error': rows[0]['error']} if rows else None
     return cashed_data
 
-async def update_cashe_process(pool=POOL) -> None:
-    query = f'UPDATE "{SCHEMA}".cashe SET process = true'
+async def update_cashe_process(pool) -> list:
+    # Запрос для обновления и получения tg_id
+    update_query = f'''
+    UPDATE "{SCHEMA}".cashe
+    SET process = true
+    WHERE process = false
+    RETURNING user_id
+    '''
+    
+    # Запрос для получения tg_id по user_id
+    user_query = f'''
+    SELECT tg_id
+    FROM "{SCHEMA}".users
+    WHERE id = $1
+    '''
+    
     async with pool.acquire() as conn:
-        await conn.execute(query)
+        # Выполняем обновление и получаем обновленные user_id
+        updated_rows = await conn.fetch(update_query)
+        
+        # Получаем tg_id для обновленных user_id
+        tg_ids = [row['user_id'] for row in updated_rows]
+        tg_ids_list = []
+        
+        for user_id in tg_ids:
+            tg_id_row = await conn.fetchrow(user_query, user_id)
+            if tg_id_row:
+                tg_ids_list.append(tg_id_row['tg_id'])
+    
+    return tg_ids_list
+
         
 
 async def write_cashed_data(user_id:int, cashed_data: dict, pool=POOL) -> None:

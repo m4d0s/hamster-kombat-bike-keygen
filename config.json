@@ -1,5 +1,10 @@
 {
-    "API_TOKEN": "7371621001:AAF_Mw2UGgZQ_zTCJYQcLFmi54pIlLfy9Rc",
+    "API_TOKEN": "6567944149:AAE8bPXXugVGg67sqm5XNi4vcH2dSDLqoo4",
+    "FIRST_SETUP" : {
+        "BOT_ID": 6567944149,
+        "BOT_USERNAME": "tonfastbot",
+        "DEV": 5043492422
+    },
 
     "DB" : {
         "HOST": "127.0.0.1",
@@ -11,7 +16,6 @@
         "SSL": false
     },
 
-    "SQLITE" : "sql/sqlite.db",
     "PROXY": [  
                 "http://leucois9ux-mobile-country-GB-state-6269131-city-2644210-hold-session-session-669150dcb2dc8:eThapYQvdMX5Tttn@93.190.138.107:9999",
                 "http://leucois9ux-mobile-country-GB-state-6269131-city-2641673-hold-session-session-669150ea5b3ca:eThapYQvdMX5Tttn@93.190.138.107:9999",
@@ -24,6 +28,7 @@
                 "http://leucois9ux-mobile-country-GB-state-6269131-city-2643743-hold-session-session-669153104265b:eThapYQvdMX5Tttn@93.190.138.107:9999",
                 "http://leucois9ux-mobile-country-GB-state-6269131-city-2644688-hold-session-session-6691531b21756:eThapYQvdMX5Tttn@93.190.138.107:9999"
             ],
+
     "EVENTS":{
         "BIKE" : {
             "NAME" : "Bike Ride 3D",

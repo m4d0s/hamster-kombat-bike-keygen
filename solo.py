@@ -7,8 +7,7 @@ import json
 import os
 
 from generate import get_key, get_logger
-from database import insert_key_generation, get_pool
-from telegram import POOL
+from database import insert_key_generation, get_pool, insert_user
 
 # Function to load the JSON config asynchronously
 async def load_config(file_path:str):
@@ -21,9 +20,10 @@ async def new_key(session:aiohttp.ClientSession, game:str, api_token:str, pool:a
         key = await get_key(session, game)
         if key:
             logger.info(f"Key for game {game} generated: {key}")
+            await insert_key_generation(int(api_token.split(":")[0]), key, game, used=False, pool=pool)
         else:
             logger.warning(f"Failed to generate key for game {game}")
-        await insert_key_generation(int(api_token.split(":")[0]), key, game, used=False, pool=pool)
+        
     except Exception as e:
         logger.error(f"Error generating key for {game}: {e}")
 
@@ -35,6 +35,7 @@ async def main() -> None:
     semaphore = asyncio.Semaphore(limit)
     logger = get_logger()
     pool = await get_pool()
+    await insert_user(config['FIRST_SETUP']['BOT_ID'], config['FIRST_SETUP']['BOT_USERNAME'], pool=pool)
 
     async with aiohttp.ClientSession() as session:
         i = 0
