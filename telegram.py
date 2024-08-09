@@ -130,7 +130,9 @@ async def update_report(chat_id:int, text:str|dict, keyboard: InlineKeyboardMark
 
 
 async def try_to_delete(chat_id:int, message_id:int) -> bool:
-    message_id = message_id if message_id else 0
+    if message_id is None or message_id == 0:
+        logger.warning('Message ID is None to delete in chat ' + str(chat_id))
+        return False
     try:
         await bot.delete_message(chat_id=chat_id, message_id=message_id)
         return True
@@ -138,7 +140,9 @@ async def try_to_delete(chat_id:int, message_id:int) -> bool:
         return False
     
 async def try_to_edit(text:str, chat_id:int, message_id:int) -> bool:
-    message_id = message_id if message_id else 0
+    if message_id is None or message_id == 0:
+        logger.warning('Message ID is None to edit in chat ' + str(chat_id))
+        return False
     try:
         await bot.edit_message_text(text, chat_id, message_id, parse_mode=ParseMode.HTML)
         return True
@@ -157,8 +161,10 @@ async def send_error_message(chat_id:int, message:str, e = Exception('')) -> typ
     return ERROR_MESS
     
 async def new_message(message: str, chat_id: int) -> types.Message:
-    return await bot.send_message(text=html_back_escape(message), chat_id=chat_id, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
-
+    try:
+        return await bot.send_message(text=html_back_escape(message), chat_id=chat_id, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
+    except BotBlocked:
+        logger.warning("Bot was blocked by user ({user_id})".format(user_id=chat_id))
 async def send_message_to_user(user_id:int, text: str, keyboard: InlineKeyboardMarkup) -> None:
     bot_info = await bot.get_me()
     if user_id == bot_info.id:
@@ -180,7 +186,17 @@ async def send_message_to_user(user_id:int, text: str, keyboard: InlineKeyboardM
 async def send_language_choose(message: types.Message) -> None:
     WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(message.chat.id) ##cashe
     user = await get_user(message.chat.id, pool=POOL)
+    logger.debug("User {user_id} started bot, lang: {lang}".format(user_id=message.chat.id, lang=message.from_user.language_code))
     if not user:
+        lang_code = message.from_user.language_code
+        if lang_code and lang_code in translate.keys():
+            fake_callback = types.CallbackQuery(id=f"simulated_lang_{lang_code}_{message.from_user.id}",
+                                                                data=f'lang_{lang_code}_{message.get_args()}', 
+                                                                message=message, 
+                                                                from_user=message.from_user)
+            fake_callback.from_user = message.from_user
+            await process_callback_language(fake_callback)
+            return
         text = f"{translate[LANG]['send_language_choose'][0]}\n"
         keyboard = InlineKeyboardMarkup(row_width=2)
         for x in translate:
@@ -297,9 +313,9 @@ async def update_welcome_message(message: types.Message, today_keys:list) -> Non
 
     if WELCOME:
         await try_to_delete(chat_id=message.chat.id, message_id=WELCOME)
-
+    bot_info = await bot.get_me()
     text1 =  translate[LANG]['update_welcome_message'][1].replace('{message.chat.id}', str(message.chat.id))
-    text1 += translate[LANG]['update_welcome_message'][2].replace('{message.chat.id}', str(message.chat.id))
+    text1 += translate[LANG]['update_welcome_message'][2].replace('{message.chat.id}', str(message.chat.id)).replace('{bot_username}', bot_info.username)
     if today_keys:
         today_keys = sorted(today_keys, key=lambda x: x[1], reverse=True)
         text2 = '\n'.join([f'<b>{type}:</b> <code>{key}</code> ({format_remaining_time(key_time)})' for key, key_time, type in today_keys])
@@ -354,7 +370,10 @@ async def process_callback_generate_menu(callback_query: types.CallbackQuery) ->
 @dp.callback_query_handler(lambda c: c.data.startswith('generate_key_'))
 async def generate_key(callback_query: types.CallbackQuery) -> None:
     WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(callback_query.message.chat.id) ##cashe
-    await bot.answer_callback_query(callback_query.id)
+    try:
+        await bot.answer_callback_query(callback_query.id)
+    except InvalidQueryID:
+        pass
     game_key = callback_query.data.split('_')[2]
     limit_keys = json_config['COUNT'] + len(await get_all_refs(pool=POOL, user_id=callback_query.message.chat.id))
 

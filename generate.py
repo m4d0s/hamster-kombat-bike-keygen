@@ -105,15 +105,18 @@ async def fetch_api(session:aiohttp.ClientSession, path: str, body:dict, auth:st
         logger.debug(f"Using proxy: {proxy}")
         data = await res.text()
 
-        logger.debug(f'URL: {url}')
-        logger.debug(f'Headers: {headers}')
-        logger.debug(f'Body: {body}')
-        logger.debug(f'Response Status: {res.status}')
-        logger.debug(f'Response Body: {data}')
+        if DEBUG_MODE:
+            logger.debug(f'URL: {url}')
+            logger.debug(f'Headers: {headers}')
+            logger.debug(f'Body: {body}')
+            logger.debug(f'Response Status: {res.status}')
+            logger.debug(f'Response Body: {data}')
+        
 
-        if not res.ok:
+        elif not res.ok:
+            asyncio.sleep(10)
             set_work_proxy(proxy, False)
-            raise Exception(f"{res.status} {res.reason}: {data}")
+            raise Exception(f"{res.status} {res.reason}") #{data}")
             
         set_work_proxy(proxy, False)
 
