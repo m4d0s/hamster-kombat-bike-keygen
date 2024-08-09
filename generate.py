@@ -12,11 +12,21 @@ from database import log_timestamp
 config = json.loads(open('config.json').read())
 ALL_EVENTS = config['EVENTS']
 DEBUG_MODE = config['DEBUG']
-PROXY_LIST = config['PROXY']  # Load the list of proxies from config
+PROXY_LIST = [{'proxy':proxy, 'work': False} for proxy in config['PROXY']]   # Load the list of proxies from config
 farmed_keys, attempts = 0, {}
 loading, MAX_LOAD = 0, 15
 
 users = [x for x in ALL_EVENTS]
+
+def get_free_proxy():
+    for proxy in random.shuffle(PROXY_LIST):
+        # if not proxy['work']:
+            set_work_proxy(proxy)
+            return proxy['proxy']
+    return None
+
+def set_work_proxy(proxy, work = True):
+    PROXY_LIST[PROXY_LIST.index(proxy)]['work'] = work
 
 def get_logger(file_level=logging.DEBUG, console_level=logging.DEBUG, base_level=logging.DEBUG):
     # Создаем логгер
@@ -81,12 +91,10 @@ async def fetch_api(session:aiohttp.ClientSession, path: str, body=None|dict, au
         headers['authorization'] = f'Bearer {auth}'
     else:
         headers['content-type'] = 'application/json'
-
-    # Select a random proxy from the list
-    proxy = random.choice(PROXY_LIST)
-    logger.debug(f"Using proxy: {proxy}")
+    proxy = get_free_proxy()
 
     async with session.post(url, headers=headers, json=body, proxy=proxy) as res:
+        logger.debug(f"Using proxy: {proxy}")
         data = await res.text()
 
         if config['DEBUG']:
@@ -97,7 +105,10 @@ async def fetch_api(session:aiohttp.ClientSession, path: str, body=None|dict, au
             logger.debug(f'Response Body: {data}')
 
         if not res.ok:
+            set_work_proxy(proxy, False)
             raise Exception(f"{res.status} {res.reason}: {data}")
+            
+        set_work_proxy(proxy, False)
 
         return await res.json()
 
