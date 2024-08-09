@@ -227,7 +227,7 @@ async def send_welcome(message: types.Message) -> None:
 async def mass_report(message: types.Message) -> None:
     WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(message.chat.id) ##cashe
     devs = await get_all_dev(pool=POOL)
-    if message.chat.id not in devs and not process_completed:
+    if devs is None or message.chat.id not in devs or not process_completed:
         return
     await send_report_example(message)
 
@@ -272,7 +272,9 @@ async def report(message: types.Message) -> None:
     keyboard = InlineKeyboardMarkup()
     urls = re.findall(r'\[(.+?)\]\[(.+?)\]', message.text)
     text_without_buttons = re.sub(r'\[(.+?)\]\[(.+?)\]', '', message.html_text).strip()
-    transl = re.findall(r'\<pre\>```(.+?)\n(.+?)\n```<\/pre\>', message.html_text)
+    # Регулярное выражение для извлечения текста на разных языках
+    pattern = re.compile(r'<pre>```(\w+)\n(.*?)\n```</pre>', re.DOTALL)
+    transl = pattern.findall(text_without_buttons)
 
     # Обработка `transl`
     if transl:

@@ -220,6 +220,7 @@ async def write_cashed_data(user_id:int, cashed_data: dict, pool=POOL) -> None:
                 insert_query = f'''
                     INSERT INTO "{SCHEMA}".cashe (user_id, {', '.join(cashed_data.keys())})
                     VALUES ($1, {', '.join([f'${i+2}' for i in range(len(cashed_data))])})
+                    ON CONFLICT (user_id) DO UPDATE SET {', '.join([f'{key} = EXCLUDED.{key}' for key in cashed_data.keys()])}
                 '''
                 await conn.execute(insert_query, user_id_in_db, *cashed_data.values())
 
