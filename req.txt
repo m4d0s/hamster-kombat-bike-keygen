@@ -1,5 +1,4 @@
-aiogram
+aiogram==2.25.1
 asyncpg
 quart
-asyncpg
-hybercorn
+aiohttp
