@@ -313,9 +313,9 @@ async def update_welcome_message(message: types.Message, today_keys:list) -> Non
 
     if WELCOME:
         await try_to_delete(chat_id=message.chat.id, message_id=WELCOME)
-
+    bot_info = await bot.get_me()
     text1 =  translate[LANG]['update_welcome_message'][1].replace('{message.chat.id}', str(message.chat.id))
-    text1 += translate[LANG]['update_welcome_message'][2].replace('{message.chat.id}', str(message.chat.id))
+    text1 += translate[LANG]['update_welcome_message'][2].replace('{message.chat.id}', str(message.chat.id)).replace('{bot_username}', bot_info.username)
     if today_keys:
         today_keys = sorted(today_keys, key=lambda x: x[1], reverse=True)
         text2 = '\n'.join([f'<b>{type}:</b> <code>{key}</code> ({format_remaining_time(key_time)})' for key, key_time, type in today_keys])
