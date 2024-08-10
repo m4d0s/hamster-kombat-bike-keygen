@@ -312,8 +312,8 @@ async def send_welcome(message: types.Message) -> None:
     today_keys = await get_all_user_keys_24h(message.chat.id, pool=POOL)
     refs = await get_all_refs(pool=POOL, user_id=message.chat.id)
     
-    user_limit_keys = len(today_keys)
-    global_limit_keys = json_config['COUNT'] + len(refs)
+    user_limit_keys = len(today_keys) if today_keys else 0
+    global_limit_keys = json_config['COUNT'] + len(refs) if refs else json_config['COUNT']
     
     def create_pseudo_file(content: str, filename: str = "keys.txt"):
         pseudo_file = BytesIO()
@@ -358,8 +358,8 @@ async def process_callback_generate_menu(callback_query: types.CallbackQuery) ->
     today_keys = await get_all_user_keys_24h(message.chat.id, pool=POOL)
     refs = await get_all_refs(pool=POOL, user_id=message.chat.id)
     
-    user_limit_keys = len(today_keys)
-    global_limit_keys = json_config['COUNT'] + len(refs)
+    user_limit_keys = len(today_keys) if today_keys else 0
+    global_limit_keys = json_config['COUNT'] + len(refs) if refs else json_config['COUNT']
     
     if WELCOME:
         await try_to_delete(chat_id=message.chat.id, message_id=WELCOME)
@@ -396,8 +396,8 @@ async def generate_key(callback_query: types.CallbackQuery) -> None:
     today_keys = await get_all_user_keys_24h(callback_query.message.chat.id, pool=POOL)
     refs = await get_all_refs(pool=POOL, user_id=callback_query.message.chat.id)
 
-    user_limit_keys = len(today_keys)
-    global_limit_keys = json_config['COUNT'] + len(refs)
+    user_limit_keys = len(today_keys) if today_keys else 0
+    global_limit_keys = json_config['COUNT'] + len(refs) if refs else json_config['COUNT']
 
     if LOADING and process_completed:
         await try_to_delete(chat_id=callback_query.message.chat.id, message_id=LOADING)
