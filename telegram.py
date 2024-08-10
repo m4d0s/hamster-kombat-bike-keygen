@@ -347,7 +347,8 @@ async def process_callback_generate_menu(callback_query: types.CallbackQuery) ->
     WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(callback_query.message.chat.id) ##cashe
     message = callback_query.message
     today_keys = await get_all_user_keys_24h(callback_query.message.chat.id, pool=POOL)
-    limit_keys = json_config['COUNT'] + len(await get_all_refs(pool=POOL, user_id=callback_query.message.chat.id))
+    refs = await get_all_refs(pool=POOL, user_id=callback_query.message.chat.id)
+    limit_keys = len(today_keys) + len(refs)
     
     if WELCOME:
         await try_to_delete(chat_id=message.chat.id, message_id=WELCOME)
@@ -380,7 +381,9 @@ async def generate_key(callback_query: types.CallbackQuery) -> None:
     limit_keys = json_config['COUNT'] + len(await get_all_refs(pool=POOL, user_id=callback_query.message.chat.id))
 
     last_user_key = await get_last_user_key(callback_query.message.chat.id, pool=POOL)
-    today_keys = await get_all_user_keys_24h(callback_query.message.chat.id, pool=POOL) or []
+    today_keys = await get_all_user_keys_24h(callback_query.message.chat.id, pool=POOL)
+    refs = await get_all_refs(pool=POOL, user_id=callback_query.message.chat.id)
+    limit_keys = len(today_keys) + len(refs)
 
     if LOADING and process_completed:
         await try_to_delete(chat_id=callback_query.message.chat.id, message_id=LOADING)
@@ -390,7 +393,7 @@ async def generate_key(callback_query: types.CallbackQuery) -> None:
         return not last_user_key or abs(relative_time(last_user_key['time'])) > DELAY
 
     if can_generate_key() and process_completed:
-        if len(today_keys) < limit_keys:
+        if limit_keys < json_config['COUNT']+len(refs):
             mins = json_config['EVENTS'][game_key]['EVENTS_DELAY'][0] * 15 // 60000 // 2
             LOADING_MESS = await new_message(translate[LANG]['generate_key'][0].replace('{mins}', str(mins)), callback_query.message.chat.id)
             LOADING = LOADING_MESS.message_id
