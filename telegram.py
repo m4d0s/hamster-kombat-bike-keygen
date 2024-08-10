@@ -2,6 +2,7 @@ import asyncio
 import aiohttp
 import json
 import re
+import random
 from io import BytesIO
 
 from aiogram import Bot, Dispatcher, executor, types
@@ -10,7 +11,7 @@ from aiogram.utils.exceptions import (MessageNotModified, MessageToDeleteNotFoun
                                       ChatNotFound, BotBlocked, MessageIsTooLong, MessageToEditNotFound)
 
 from generate import generate_loading_bar, get_key, logger
-from database import (log_timestamp, insert_key_generation, get_last_user_key, get_all_dev, get_all_user_ids,
+from database import (insert_key_generation, get_last_user_key, get_all_dev, get_all_user_ids, now,
                       get_unused_key_of_type, relative_time, get_all_user_keys_24h, insert_user, format_remaining_time, 
                       delete_user, get_pool, get_all_refs, get_user, get_cashed_data, write_cashed_data, update_cashe_process)
 
@@ -23,6 +24,7 @@ with open('localization.json') as f:
 API_TOKEN = json_config['API_TOKEN']
 DELAY = json_config['DELAY']
 DEBUG_KEY = json_config['DEBUG_KEY']
+DEBUG = json_config['DEBUG']
 POOL = None
 
 # Initialize bot and dispatcher
@@ -57,27 +59,30 @@ def html_back_escape(text:str) -> str:
 
 async def update_loadbar(chat_id:int, game_key:str) -> None:
     WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(chat_id) ##cashe
-    sec = json_config['EVENTS'][game_key]['EVENTS_DELAY'][1] * 15 // 1000
-    mins = json_config['EVENTS'][game_key]['EVENTS_DELAY'][1] * 15 // 60000 // 2
+    
+    if DEBUG:
+        sec = json_config['DEBUG_DELAY'][1] // 2 // 1000
+    else:
+        sec = json_config['EVENTS'][game_key]['EVENTS_DELAY'][1] * 15 // 1000 // 3
     loading = 0
     process_completed = False
     await set_cached_data(chat_id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
     while not process_completed:
         text = generate_loading_bar(progress=loading, max=sec)
         
-        time = translate[LANG]['generate_key'][0].replace('{mins}', '5')
+        time = translate[LANG]['generate_key'][0].replace('{mins}', format_remaining_time(now() + sec))
         plus_text = translate[LANG]['generate_key'][7].replace('{key}', game_key) if loading > sec else ''
         full = time + '\n\n' + text + '\n' + plus_text
         try:
             await try_to_edit(full, chat_id, LOADING)
         except MessageNotModified:
             pass
-        loading += 1
+        loading += 1000 + random.randint(0, 1000)
         await asyncio.sleep(1)
         WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(chat_id) ##cashe
     process_completed = True
     loading = sec
-    text = generate_loading_bar(progress=loading, max=mins)
+    text = generate_loading_bar(progress=loading, max=sec)
     full = time + '\n\n' + text
     await try_to_edit(full, chat_id, LOADING)
     await set_cached_data(chat_id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
@@ -207,6 +212,7 @@ async def send_language_choose(message: types.Message) -> None:
     else:
         await send_welcome(message)
         await insert_user(message.chat.id, message.from_user.username, ref=user['ref'], lang=LANG,  pool=POOL)
+    await asyncio.sleep(1) ##delay1
     await try_to_delete(chat_id=message.chat.id, message_id=message.message_id)
     await set_cached_data(message.chat.id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
 
@@ -219,9 +225,9 @@ async def process_callback_language(callback_query: types.CallbackQuery) -> None
     await insert_user(callback_query.message.chat.id, callback_query.from_user.username, ref=ref, lang=LANG, pool=POOL)
     await send_welcome(callback_query.message)
 
-async def send_welcome(message: types.Message) -> None:
-    today_keys = await get_all_user_keys_24h(message.chat.id, pool=POOL)
-    await update_welcome_message(message, today_keys)
+# async def send_welcome(message: types.Message) -> None:
+#     today_keys = await get_all_user_keys_24h(message.chat.id, pool=POOL)
+#     await update_welcome_message(message, today_keys)
     
 @dp.message_handler(commands=['report'])
 async def mass_report(message: types.Message) -> None:
@@ -299,12 +305,15 @@ async def report(message: types.Message) -> None:
     await update_report(message.chat.id, text_without_buttons, keyboard)
 
 
-async def update_welcome_message(message: types.Message, today_keys:list) -> None:
+async def send_welcome(message: types.Message) -> None:
     WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(message.chat.id) ##cashe
     inline_btn_generate = InlineKeyboardButton(translate[LANG]['update_welcome_message'][0], callback_data='generate_menu')
     inline_kb = InlineKeyboardMarkup().add(inline_btn_generate)
+    today_keys = await get_all_user_keys_24h(message.chat.id, pool=POOL)
     refs = await get_all_refs(pool=POOL, user_id=message.chat.id)
-    limit_keys = json_config['COUNT'] + len(refs)
+    
+    user_limit_keys = len(today_keys)
+    global_limit_keys = json_config['COUNT'] + len(refs)
     
     def create_pseudo_file(content: str, filename: str = "keys.txt"):
         pseudo_file = BytesIO()
@@ -320,11 +329,11 @@ async def update_welcome_message(message: types.Message, today_keys:list) -> Non
     text1 += translate[LANG]['update_welcome_message'][2].replace('{message.chat.id}', str(message.chat.id)).replace('{bot_username}', bot_info.username)
     if today_keys:
         today_keys = sorted(today_keys, key=lambda x: x[1], reverse=True)
-        text2 = '\n'.join([f'<b>{type}:</b> <code>{key}</code> ({format_remaining_time(key_time)})' for key, key_time, type in today_keys])
+        text2 = '\n'.join([f'<b>{type}:</b> <code>{key}</code> ({format_remaining_time(key_time, pref=translate[LANG]["format_remaining_time"][0])})' for key, key_time, type in today_keys])
     else:
 
         text2 = translate[LANG]['update_welcome_message'][3]
-    text3 = f'\n\n<b>{translate[LANG]["update_welcome_message"][4]}</b> {limit_keys - len(today_keys) if today_keys else limit_keys}/{limit_keys}'
+    text3 = f'\n\n<b>{translate[LANG]["update_welcome_message"][4]}</b> {global_limit_keys - user_limit_keys if today_keys else global_limit_keys}/{global_limit_keys}'
     text3 += translate[LANG]['update_welcome_message'][5]
     
     text = text1 + text2 + text3
@@ -332,7 +341,7 @@ async def update_welcome_message(message: types.Message, today_keys:list) -> Non
         WELCOME_MESS = await bot.send_message(text=text, chat_id=message.chat.id, parse_mode=ParseMode.HTML, reply_markup=inline_kb)
         WELCOME = WELCOME_MESS.message_id
     except MessageIsTooLong:
-        keys = '\n'.join([f'{format_remaining_time(key_time)}({type}): {key}' for key, key_time, type in today_keys])
+        keys = '\n'.join([f'{type}:\t{key}\t({format_remaining_time(key_time, pref=translate[LANG]["format_remaining_time"][0])})' for key, key_time, type in today_keys])
         pseudo_file = create_pseudo_file(keys)
         text = text1 + f" <i>{translate[LANG]['update_welcome_message'][6]}</i>" + text3
         WELCOME_MESS = await bot.send_document(chat_id=message.chat.id, document=pseudo_file, caption=text, parse_mode=ParseMode.HTML, reply_markup=inline_kb)
@@ -346,15 +355,17 @@ async def update_welcome_message(message: types.Message, today_keys:list) -> Non
 async def process_callback_generate_menu(callback_query: types.CallbackQuery) -> None:
     WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(callback_query.message.chat.id) ##cashe
     message = callback_query.message
-    today_keys = await get_all_user_keys_24h(callback_query.message.chat.id, pool=POOL)
-    refs = await get_all_refs(pool=POOL, user_id=callback_query.message.chat.id)
-    limit_keys = len(today_keys) + len(refs)
+    today_keys = await get_all_user_keys_24h(message.chat.id, pool=POOL)
+    refs = await get_all_refs(pool=POOL, user_id=message.chat.id)
+    
+    user_limit_keys = len(today_keys)
+    global_limit_keys = json_config['COUNT'] + len(refs)
     
     if WELCOME:
         await try_to_delete(chat_id=message.chat.id, message_id=WELCOME)
     
     text = translate[LANG]['process_callback_generate_menu'][0]
-    text += f"\n<b>{translate[LANG]['process_callback_generate_menu'][1]}</b> {limit_keys - len(today_keys) if today_keys else limit_keys}/{limit_keys}"
+    text += f"\n<b>{translate[LANG]['process_callback_generate_menu'][1]}</b> {global_limit_keys - user_limit_keys if today_keys else global_limit_keys}/{global_limit_keys}"
     text += translate[LANG]['process_callback_generate_menu'][2]
 
     keyboard = InlineKeyboardMarkup()
@@ -372,28 +383,31 @@ async def process_callback_generate_menu(callback_query: types.CallbackQuery) ->
 
 @dp.callback_query_handler(lambda c: c.data.startswith('generate_key_'))
 async def generate_key(callback_query: types.CallbackQuery) -> None:
+    global DEBUG
     WELCOME, LOADING, REPORT, process_completed, LANG, RIGHT, ERROR = await get_cached_data(callback_query.message.chat.id) ##cashe
     try:
         await bot.answer_callback_query(callback_query.id)
     except InvalidQueryID:
         pass
     game_key = callback_query.data.split('_')[2]
-    limit_keys = json_config['COUNT'] + len(await get_all_refs(pool=POOL, user_id=callback_query.message.chat.id))
-
+    delay = 5 ##delay5
+    
     last_user_key = await get_last_user_key(callback_query.message.chat.id, pool=POOL)
     today_keys = await get_all_user_keys_24h(callback_query.message.chat.id, pool=POOL)
     refs = await get_all_refs(pool=POOL, user_id=callback_query.message.chat.id)
-    limit_keys = len(today_keys) + len(refs)
+
+    user_limit_keys = len(today_keys)
+    global_limit_keys = json_config['COUNT'] + len(refs)
 
     if LOADING and process_completed:
         await try_to_delete(chat_id=callback_query.message.chat.id, message_id=LOADING)
         LOADING = None
 
     def can_generate_key():
-        return not last_user_key or abs(relative_time(last_user_key['time'])) > DELAY
+        return not last_user_key or abs(relative_time(last_user_key['time'])) > DELAY or DEBUG
 
     if can_generate_key() and process_completed:
-        if limit_keys < json_config['COUNT']+len(refs):
+        if user_limit_keys < global_limit_keys:
             mins = json_config['EVENTS'][game_key]['EVENTS_DELAY'][0] * 15 // 60000 // 2
             LOADING_MESS = await new_message(translate[LANG]['generate_key'][0].replace('{mins}', str(mins)), callback_query.message.chat.id)
             LOADING = LOADING_MESS.message_id
@@ -422,7 +436,7 @@ async def generate_key(callback_query: types.CallbackQuery) -> None:
                         else:
                             await try_to_delete(callback_query.message.chat.id, LOADING)
                             await insert_key_generation(callback_query.message.chat.id, key, game_key, pool=POOL)
-                            LOADING_MESS = await new_message(translate[LANG]['generate_key'][3].replace('{key}', key), callback_query.message.chat.id)
+                            LOADING_MESS = await new_message(translate[LANG]['generate_key'][3].replace('{key}', key).replace('{delay}', str(delay)), callback_query.message.chat.id)
                             LOADING = LOADING_MESS.message_id
                             await set_cached_data(callback_query.message.chat.id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
                         process_completed = True
@@ -454,6 +468,7 @@ async def generate_key(callback_query: types.CallbackQuery) -> None:
             
     await set_cached_data(callback_query.message.chat.id, WELCOME, LOADING, REPORT, process_completed, ERROR) ##write
     await try_to_delete(chat_id=callback_query.message.chat.id, message_id=WELCOME)
+    await asyncio.sleep(delay)
     await send_welcome(callback_query.message)
 
 if __name__ == '__main__':

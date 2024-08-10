@@ -95,7 +95,7 @@ async def get_unused_key_of_type(key_type:str, pool=POOL) -> str:
 
 async def get_all_user_keys_24h(user_id:id, day=0, pool=POOL) -> list:
     if user_id is None:
-        return
+        return []
     
     async with pool.acquire() as conn:
         async with conn.transaction():
@@ -106,7 +106,7 @@ async def get_all_user_keys_24h(user_id:id, day=0, pool=POOL) -> list:
             
             rows = await conn.fetch(f'SELECT key, time, type FROM "{SCHEMA}".keys WHERE user_id = $1 AND time > $2 ORDER BY time DESC', num, now() - 86400 * (abs(day) + 1))
     
-    return [[row['key'], row['time'], row['type']] for row in rows] if rows else None
+    return [[row['key'], row['time'], row['type']] for row in rows] if rows and len(rows) > 0 else []
 
 async def delete_user(user_id: int, pool=POOL) -> None:
     if user_id is None:
@@ -275,19 +275,21 @@ async def get_user(user_id:int, pool=POOL) -> dict:
 def relative_time(time):
     return now() - time
 
-def format_remaining_time(target_time: int) -> str:
-    waste = target_time - now()
+def format_remaining_time(target_time: int, pref = " ago") -> str:
+    waste = relative_time(target_time)
     prefix = ""
     
     if waste < 0:
-        prefix = 'ago'
+        waste = abs(waste)
+        prefix += pref
 
     hours, remainder = divmod(waste, 3600)
     minutes, seconds = divmod(remainder, 60)
     
     if hours > 0:
-        return f"{hours} hours {minutes} minutes {prefix}"
+        return f"{int(hours)} hours {int(minutes)} minutes{prefix}"
     elif minutes > 0:
-        return f"{minutes} minutes {prefix}"
+        return f"{int(minutes)} minutes{prefix}"
     else:
-        return f"{seconds} seconds {prefix}"
+        return f"{int(seconds)} seconds{prefix}"
+

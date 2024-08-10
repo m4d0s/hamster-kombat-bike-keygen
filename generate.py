@@ -124,6 +124,11 @@ async def fetch_api(session:aiohttp.ClientSession, path: str, body:dict, auth:st
 
 async def get_key(session, game_key):
     global loading, MAX_LOAD
+    
+    if DEBUG_MODE:
+        await asyncio.sleep(randint(config['DEBUG_DELAY'][0], config['DEBUG_DELAY'][1]) / 1000)
+        return config['DEBUG_KEY'] + "-" + "".join([random.choice("0123456789ABCDE") for _ in range(16)])
+        
     game_config = config['EVENTS'][game_key]
     delay_ms = randint(config['EVENTS'][game_key]['EVENTS_DELAY'][0], config['EVENTS'][game_key]['EVENTS_DELAY'][1])
     client_id = str(uuid.uuid4())
