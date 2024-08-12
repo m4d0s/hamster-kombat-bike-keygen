@@ -34,7 +34,7 @@ POOL = None
 # Initialize bot and dispatcher
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
-sem = asyncio.Semaphore(10)
+sem = asyncio.Semaphore(25)
 
 async def check_completed_tasks(user_id:int):
     global POOL
@@ -86,6 +86,7 @@ async def get_key_limit(user:int, default=json_config['COUNT']):
     count = default
     today_keys = await get_all_user_keys_24h(user, pool=POOL)
     
+    #Высчитываем рефов
     refs = await get_all_refs(pool=POOL, user_id=user)
     refs = len(refs) if refs else 0
     
@@ -135,8 +136,16 @@ async def get_cached_data(user_id:int) -> tuple:
 def html_back_escape(text:str) -> str:
     return str(text).replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
 
-
-
+def hide_key(key:str) -> str:
+    hide_symb = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    hiden_key = ''
+    for i in range(len(key)):
+        if key[i] in hide_symb:
+            hiden_key += '*'
+        else:
+            hiden_key += key[i]
+    return hiden_key
+ 
 async def update_loadbar(chat_id:int, game_key:str) -> None:
     cache = await get_cached_data(chat_id) ##cache
     
@@ -453,7 +462,11 @@ async def send_welcome(message: types.Message) -> None:
         today_keys = sorted(today_keys, key=lambda x: x[1], reverse=True)
         if cheating:
             text2 = '\n'.join([f'<b>{type}:</b> <code>{key}</code> ({format_remaining_time(key_time, pref=translate[cache["lang"]]["format_remaining_time"][0])})' 
-                               for key, key_time, type in today_keys[:lost_tries]])
+                               for key, key_time, type in today_keys[:-lost_tries]])
+            text2 += '\n' + '\n'.join([f'<b>{type}:</b> <code>{hide_key(key)}</code> ({format_remaining_time(key_time, pref=translate[cache["lang"]]["format_remaining_time"][0])})' 
+                               for key, key_time, type in today_keys[len(today_keys)-lost_tries:]])
+            text2 += '\n' + translate[cache['lang']]['update_welcome_message'][8]
+            
         else:
             text2 = '\n'.join([f'<b>{type}:</b> <code>{key}</code> ({format_remaining_time(key_time, pref=translate[cache["lang"]]["format_remaining_time"][0])})' 
                                for key, key_time, type in today_keys])
