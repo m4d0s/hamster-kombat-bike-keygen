@@ -174,9 +174,8 @@ async def update_report(chat_id:int, text:str|dict, keyboard: InlineKeyboardMark
     tasks = []
     for user_id in user_ids:
         if type(text) is dict:
-            wel, loa, rep, pro, lang, ri, err = await get_cached_data(user_id) ##cache
-            if lang in text.keys():
-                tasks.append(asyncio.create_task(send_message_to_user(user_id, text[lang], keyboard)))
+            if cache['lang'] in text.keys():
+                tasks.append(asyncio.create_task(send_message_to_user(user_id, text[cache['lang']], keyboard)))
             else:
                 tasks.append(asyncio.create_task(send_message_to_user(user_id, text['default'], keyboard)))
         else:
