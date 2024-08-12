@@ -114,7 +114,7 @@ async def fetch_api(session:aiohttp.ClientSession, path: str, body:dict, auth:st
         
 
         elif not res.ok:
-            asyncio.sleep(10)
+            await asyncio.sleep(10)
             set_work_proxy(proxy, False)
             raise Exception(f"{res.status} {res.reason}") #{data}")
             

@@ -1,17 +1,17 @@
 {
-    "API_TOKEN": "7371621001:AAF_Mw2UGgZQ_zTCJYQcLFmi54pIlLfy9Rc",
+    "API_TOKEN": "6567944149:AAE8bPXXugVGg67sqm5XNi4vcH2dSDLqoo4",
     "FIRST_SETUP" : {
-        "BOT_ID": 7371621001,
-        "BOT_USERNAME": "hkbike_bot",
+        "BOT_ID": 6567944149,
+        "BOT_USERNAME": "tonfastbot",
         "DEV": 5043492422
     },
 
     "DB" : {
         "HOST": "127.0.0.1",
-        "PORT": 5433,
-        "USER": "myuser",
-        "PASSWORD": "7IBkzyuOraiK",
-        "NAME": "hamster",
+        "PORT": 5432,
+        "USER": "postgres",
+        "PASSWORD": "password",
+        "NAME": "postgres",
         "SCHEMA": "hamster-kombat-keys",
         "SSL": false
     },
