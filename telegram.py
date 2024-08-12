@@ -29,10 +29,12 @@ DEBUG_KEY = json_config['DEBUG_KEY']
 DEBUG = json_config['DEBUG']
 POOL = None
 
+# f"https://t.me/{bot_info.username}?startgroup=true&admin=post_messages+edit_messages+delete_messages+invite_users"
 
 # Initialize bot and dispatcher
 bot = Bot(token=API_TOKEN)
 dp = Dispatcher(bot)
+sem = asyncio.Semaphore(10)
 
 async def check_completed_tasks(user_id:int):
     global POOL
@@ -40,7 +42,8 @@ async def check_completed_tasks(user_id:int):
     count = {}
     for promo in promos:
         try:
-            if await bot.get_chat_member(chat_id=promos[promo]['channel'], user_id=user_id):
+            checker = await bot.get_chat_member(chat_id=promos[promo]['channel'], user_id=user_id)
+            if checker.status != 'left':
                 count = {promo: promos[promo]}
         except ChatNotFound:
             logger.warning(f"Promotion channel for task \"{promos[promo]['name']}\" ({promos[promo]['channel']}) not found")
@@ -52,9 +55,12 @@ async def get_tasks_limit(user:int):
     all_tasks = await get_promotions(pool=POOL)
     for promo in all_tasks:
         try:
-            if not await bot.get_chat(chat_id=all_tasks[promo]['channel']):
+            checker = await bot.get_chat(chat_id=all_tasks[promo]['channel'])
+            if not checker or checker.id != all_tasks[promo]['channel']:
                 all_tasks.pop(promo)
+                logger.warning(f"Error with task \"{all_tasks[promo]['name']}\" ({all_tasks[promo]['channel']}) not found, task removed")
         except ChatNotFound:
+            all_tasks.pop(promo)
             logger.warning(f"Promotion chat for task \"{all_tasks[promo]['name']}\" ({all_tasks[promo]['channel']}) not found, task removed")
     
     if cache['lang'] in transl and len(all_tasks) != 0:
@@ -63,7 +69,7 @@ async def get_tasks_limit(user:int):
                 if x in all_tasks and y in all_tasks[x]:
                     all_tasks[x][y] = transl[cache['lang']][x][y]
                 
-        user_tasks = {str(x): all_tasks[str(x)] for x in user_tasks}
+        user_tasks = {str(x): all_tasks[x] for x in user_tasks}
          
     return user_tasks, all_tasks
 
@@ -130,6 +136,7 @@ def html_back_escape(text:str) -> str:
     return str(text).replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
 
 
+
 async def update_loadbar(chat_id:int, game_key:str) -> None:
     cache = await get_cached_data(chat_id) ##cache
     
@@ -160,49 +167,73 @@ async def update_loadbar(chat_id:int, game_key:str) -> None:
     await try_to_edit(full, chat_id, cache['loading'])
     await set_cached_data(chat_id, cache) ##write
 
-async def update_report(chat_id:int, text:str|dict, keyboard: InlineKeyboardMarkup = None, users = None, warning = False) -> None:
-    cache = await get_cached_data(chat_id) ##cache
+async def update_report(chat_id: int, 
+                        text: str | dict, 
+                        keyboard: InlineKeyboardMarkup = None, 
+                        users = None, 
+                        warning = False, 
+                        max_concurrent_tasks: int = 10) -> None:
+    
+    cache = await get_cached_data(chat_id)  # Получаем кэшированные данные
     loading = 0
+    
+    # Получаем список всех пользователей, если он не был передан
     if users is None:
         user_ids = await get_all_user_ids(pool=POOL)
     else:
         if users == []:
             return
         user_ids = users
-    max = len(user_ids)
     
-    tasks = []
-    for user_id in user_ids:
-        if type(text) is dict:
-            if cache['lang'] in text.keys():
-                tasks.append(asyncio.create_task(send_message_to_user(user_id, text[cache['lang']], keyboard)))
-            else:
-                tasks.append(asyncio.create_task(send_message_to_user(user_id, text['default'], keyboard)))
-        else:
-            tasks.append(asyncio.create_task(send_message_to_user(user_id, text, keyboard)))
+    max = len(user_ids)  # Общее количество пользователей
+    
+    semaphore = asyncio.Semaphore(max_concurrent_tasks)  # Ограничение на количество параллельных задач
+
+    async def send_with_semaphore(user_id):
+        async with semaphore:
+            try:
+                if isinstance(text, dict):
+                    if cache['lang'] in text.keys():
+                        await send_message_to_user(user_id, text[cache['lang']], keyboard)
+                    else:
+                        await send_message_to_user(user_id, text['default'], keyboard)
+                else:
+                    await send_message_to_user(user_id, text, keyboard)
+            except BotBlocked:
+                await delete_user(user_id, pool=POOL)
+            except ChatNotFound:
+                await delete_user(user_id, pool=POOL)
+
+    # Создаем задачи для отправки сообщений
+    tasks = [asyncio.create_task(send_with_semaphore(user_id)) for user_id in user_ids]
 
     cache['process'] = False
-    await set_cached_data(chat_id, cache) ##write
+    await set_cached_data(chat_id, cache)  # Записываем изменения в кэш
+    
     while not cache['process']:
-        text = generate_loading_bar(progress=loading, max=max)
         loading = len([x for x in tasks if x.done()])
+        progress_text = generate_loading_bar(progress=loading, max=max)
+        
         if loading == max:
             cache['process'] = True
             break
-        time = translate[cache['lang']]['update_report'][0].replace('{mins}', str(max))
-        full = time + f'\n{loading}/{max}' + '\n\n' + text
+        
+        time_text = translate[cache['lang']]['update_report'][0].replace('{mins}', str(max))
+        full_report_text = time_text + f'\n{loading}/{max}' + '\n\n' + progress_text
+        
         try:
-            await try_to_edit(full, chat_id, cache['report'])
+            await try_to_edit(full_report_text, chat_id, cache['report'])
         except MessageNotModified:
             logger.error(f'Message for report in chat {chat_id} not modified')
-        except BotBlocked:
-            await delete_user(user_id, pool=POOL)
-        except ChatNotFound:
-            await delete_user(user_id, pool=POOL)
-        loading += 1
+        
         await asyncio.sleep(1)
+
     cache['process'] = True
-    await set_cached_data(chat_id, cache) ##write
+    await set_cached_data(chat_id, cache)  # Снова записываем изменения в кэш
+
+    # Дожидаемся завершения всех задач
+    await asyncio.gather(*tasks)
+
 
 
 
@@ -261,6 +292,9 @@ async def send_message_to_user(user_id:int, text: str, keyboard: InlineKeyboardM
     await set_cached_data(user_id, cache) ##write
 
 
+@dp.callback_query_handler(lambda c: c.data == 'main_menu')
+async def process_callback_main_menu(callback_query: types.CallbackQuery) -> None:
+    await send_welcome(callback_query.message)
 
 @dp.message_handler(commands=['start'])
 async def send_language_choose(message: types.Message) -> None:
@@ -350,7 +384,7 @@ async def report(message: types.Message) -> None:
 
     # Устанавливаем процесс как незавершенный
     cache['process'] = False
-    try_to_delete(chat_id=message.chat.id, message_id=message.message_id)
+    await try_to_delete(chat_id=message.chat.id, message_id=message.message_id)
 
     # Создаем клавиатуру и извлекаем URL и текст без кнопок
     keyboard = InlineKeyboardMarkup()
@@ -383,7 +417,6 @@ async def report(message: types.Message) -> None:
     await update_report(message.chat.id, text_without_buttons, keyboard)
 
 
-
 async def send_welcome(message: types.Message) -> None:
     cache = await get_cached_data(message.chat.id) ##cache
     inline_btn_generate = InlineKeyboardButton(translate[cache['lang']]['update_welcome_message'][0], callback_data='generate_menu')
@@ -392,6 +425,17 @@ async def send_welcome(message: types.Message) -> None:
     inline_kb.add(inline_tasks)
     today_keys = await get_all_user_keys_24h(user_id=message.chat.id, pool=POOL)
     user_limit_keys, global_limit_keys = await get_key_limit(user=message.chat.id)
+    
+    refs = await get_all_refs(pool=POOL, user_id=message.chat.id)
+    refs = len(refs) if refs else 0
+    
+    user_tasks = await check_completed_tasks(message.chat.id)
+    all_tasks = await get_promotions(pool=POOL)
+    delta = len(all_tasks) - len(user_tasks)
+    
+    lost_tries = global_limit_keys - user_limit_keys
+    cheating = lost_tries < 0
+    lost_tries = abs(lost_tries)
     
     def create_pseudo_file(content: str, filename: str = "keys.txt"):
         pseudo_file = BytesIO()
@@ -407,11 +451,19 @@ async def send_welcome(message: types.Message) -> None:
     text1 += translate[cache['lang']]['update_welcome_message'][2].replace('{message.chat.id}', str(message.chat.id)).replace('{bot_username}', bot_info.username)
     if today_keys:
         today_keys = sorted(today_keys, key=lambda x: x[1], reverse=True)
-        text2 = '\n'.join([f'<b>{type}:</b> <code>{key}</code> ({format_remaining_time(key_time, pref=translate[cache["lang"]]["format_remaining_time"][0])})' for key, key_time, type in today_keys])
+        if cheating:
+            text2 = '\n'.join([f'<b>{type}:</b> <code>{key}</code> ({format_remaining_time(key_time, pref=translate[cache["lang"]]["format_remaining_time"][0])})' 
+                               for key, key_time, type in today_keys[:lost_tries]])
+        else:
+            text2 = '\n'.join([f'<b>{type}:</b> <code>{key}</code> ({format_remaining_time(key_time, pref=translate[cache["lang"]]["format_remaining_time"][0])})' 
+                               for key, key_time, type in today_keys])
     else:
 
         text2 = translate[cache['lang']]['update_welcome_message'][3]
-    text3 = f'\n\n<b>{translate[cache["lang"]]["update_welcome_message"][4]}</b> {global_limit_keys - user_limit_keys}/{global_limit_keys}'
+        
+    
+    text3 = f'\n\n<b>{translate[cache["lang"]]["update_welcome_message"][4]}</b> {lost_tries}/{global_limit_keys} (+{refs}) (-{delta})'
+    
     text3 += translate[cache['lang']]['update_welcome_message'][5]
     
     text = text1 + text2 + text3
@@ -445,6 +497,7 @@ async def process_callback_generate_menu(callback_query: types.CallbackQuery) ->
     for type in json_config['EVENTS']:
         inline_btn = InlineKeyboardButton(text=json_config['EVENTS'][type]['NAME'], callback_data=f'generate_key_{type}')
         keyboard.add(inline_btn)
+    keyboard.add(InlineKeyboardButton(text=translate[cache['lang']]['process_callback_generate_menu'][3], callback_data='main_menu'))
 
     WELCOME_MESS = await bot.send_message(text=text, chat_id=message.chat.id, parse_mode=ParseMode.HTML, reply_markup=keyboard, disable_web_page_preview=True)
     cache['welcome'] = WELCOME_MESS.message_id
@@ -545,6 +598,7 @@ async def generate_key(callback_query: types.CallbackQuery) -> None:
 async def process_callback_generate_tasks(callback_query: types.CallbackQuery) -> None:
     message = callback_query.message
     cache = await get_cached_data(message.chat.id) ##cache
+    await get_key_limit(user=message.chat.id)
     used, all = await get_tasks_limit(user=message.chat.id)
     
     if cache['welcome']:
@@ -559,6 +613,7 @@ async def process_callback_generate_tasks(callback_query: types.CallbackQuery) -
         mark = '✅ ' if task in used else ''
         inline_btn = InlineKeyboardButton(text=mark + all[task]['name'], callback_data=f'generate_task_{task}')
         keyboard.add(inline_btn)
+    keyboard.add(InlineKeyboardButton(text=translate[cache['lang']]['process_callback_generate_tasks'][3], callback_data='main_menu'))
 
     WELCOME_MESS = await bot.send_message(text=text, chat_id=message.chat.id, parse_mode=ParseMode.HTML, reply_markup=keyboard, disable_web_page_preview=True)
     cache['welcome'] = WELCOME_MESS.message_id
@@ -568,19 +623,25 @@ async def process_callback_generate_tasks(callback_query: types.CallbackQuery) -
     
 @dp.callback_query_handler(lambda c: c.data.startswith('generate_task_'))
 async def generate_task_message(callback_query: types.CallbackQuery) -> None:
-    all, used = await get_tasks_limit(user=callback_query.from_user.id)
+    used, all = await get_tasks_limit(user=callback_query.from_user.id)
     cache = await get_cached_data(callback_query.from_user.id)
     message = callback_query.message
-    current = all[callback_query.data.replace('generate_task_', '')]
+    current = all[int(callback_query.data.replace('generate_task_', ''))]
+    checker = await bot.get_chat_member(chat_id=current['channel'], user_id=callback_query.from_user.id)
+    mark = '✅ ' if checker.status != 'left' else ''
+    foot = f"<i>{translate[cache['lang']]['generate_task_message'][0] if checker.status == 'left' else translate[cache['lang']]['generate_task_message'][3]}</i>"
     
-    text = f"<b>{all[str(callback_query.data.replace('generate_task_', ''))]['name']}</b>\n\n" +\
-            all[str(callback_query.data.replace('generate_task_', ''))]['description'] +\
-            translate[cache['lang']]['generate_task_message'][0]
+    text = mark + f"<b>{all[int(callback_query.data.replace('generate_task_', ''))]['name']}</b>\n\n" +\
+            all[int(callback_query.data.replace('generate_task_', ''))]['desc'] + "\n\n" + foot
+            
+    but_text = translate[cache['lang']]['generate_task_message'][1] if checker.status == 'left' else translate[cache['lang']]['generate_task_message'][4]
             
     keyboard = InlineKeyboardMarkup()
-    inline_btn = InlineKeyboardButton(text=translate[cache['lang']]['generate_task_message'][1], callback_data=f'check_task_{callback_query.data.replace("generate_task_", "")}')
+    inline_btn = InlineKeyboardButton(text=but_text, callback_data=f'generate_task_{callback_query.data.replace("generate_task_", "")}')
     inline_btn2 = InlineKeyboardButton(text=translate[cache['lang']]['generate_task_message'][2], callback_data='generate_tasks')
-    keyboard.add(inline_btn, inline_btn2)
+    in_but = InlineKeyboardButton(text=translate[cache['lang']]['generate_task_message'][5], url=current['link'])
+    keyboard.add(inline_btn,in_but)
+    keyboard.add(inline_btn2)
     
     if cache['welcome']:
         await try_to_delete(chat_id=message.chat.id, message_id=cache['welcome'])
@@ -588,8 +649,6 @@ async def generate_task_message(callback_query: types.CallbackQuery) -> None:
     cache['welcome'] = WELCOME_MESS.message_id
     
     await set_cached_data(message.chat.id, cache) ##write
-    
-
 
 if __name__ == '__main__':
     POOL = asyncio.get_event_loop().run_until_complete(get_pool())
