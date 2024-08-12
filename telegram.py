@@ -444,7 +444,7 @@ async def send_welcome(message: types.Message) -> None:
     
     lost_tries = global_limit_keys - user_limit_keys
     cheating = lost_tries < 0
-    lost_tries = abs(lost_tries)
+    lost_tries = abs(lost_tries) if not cheating else 0
     
     def create_pseudo_file(content: str, filename: str = "keys.txt"):
         pseudo_file = BytesIO()
