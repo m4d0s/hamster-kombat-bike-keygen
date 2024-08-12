@@ -31,7 +31,7 @@ async def main() -> None:
     config = await load_config('config.json')
     api_token = config['API_TOKEN']
     events = [x for x in config['EVENTS']]
-    limit = int(len(config['PROXY']) * 0.8) 
+    limit = config['GEN_PROXY']
     semaphore = asyncio.Semaphore(limit)
     logger = get_logger()
     pool = await get_pool()
