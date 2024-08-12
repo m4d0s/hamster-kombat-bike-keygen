@@ -56,7 +56,7 @@
         }
 
     },
-
+    "GEN_PROXY": 10,
     "DELAY": 30,
     "MAX_RETRY": 6,
     "COUNT" : 16,
