@@ -319,14 +319,14 @@ def relative_time(time, reverse=False):
         return time - now()
     return now() - time
 
-def format_remaining_time(target_time: int, pref = " ago", reverse = False) -> str:
-    waste = relative_time(target_time, reverse)
-    prefix = "" if waste < 0 else pref
-    waste = abs(waste)
+def format_remaining_time(target_time: int, pref=" ago", reverse=False) -> str:
+    delta = relative_time(target_time, reverse)
+    prefix = "" if delta < 0 else pref
+    delta = abs(delta)
 
-    seconds = waste % 60
-    minutes = (waste - seconds) % 3600 // 60
-    hours = seconds // 3600
+    seconds = delta % 60
+    minutes = (delta // 60) % 60
+    hours = (delta // 3600)
     
     if hours > 0:
         return f"{int(hours)} hours {int(minutes)} minutes{prefix}"
