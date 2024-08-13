@@ -12,9 +12,17 @@
         "USER": "postgres",
         "PASSWORD": "password",
         "NAME": "postgres",
-        "SCHEMA": "hamster-kombat-keys",
         "SSL": false
     },
+
+    "SCHEMAS" : {
+        "HAMSTER": "hamster-kombat-keys"
+    },
+
+    "GEN_PROXY": 10,
+    "DELAY": 30,
+    "MAX_RETRY": 6,
+    "COUNT" : 16,
 
     "PROXY": [  
                 "http://leucois9ux-mobile-country-GB-state-6269131-city-2644210-hold-session-session-669150dcb2dc8:eThapYQvdMX5Tttn@93.190.138.107:9999",
@@ -56,11 +64,8 @@
         }
 
     },
-    "GEN_PROXY": 10,
-    "DELAY": 30,
-    "MAX_RETRY": 6,
-    "COUNT" : 16,
+
     "DEBUG": true,
     "DEBUG_DELAY": [2500, 10000],
-    "DEBUG_KEY": "CODE-TH1S-1S-JU5T-T35T"
+    "DEBUG_KEY": "C0D3-TH1S-1S-JU5T-T35T"
 }

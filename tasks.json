@@ -1,15 +1,34 @@
 {
-  "ru": {
-    "1": {
-      "name": "Канал обновлений",
-      "desc": "Подпишись на главный канал обновления бота, чтобы не упустить ничего важного из будущих обновлений"
+    "ru": {
+        "1": {
+            "name": "Канал обновлений",
+            "desc": "Подпишись на главный канал обновления бота, чтобы не упустить ничего важного из будущих обновлений"
+        },
+        "5": {
+            "name": "Название задания",
+            "desc": "Описание задания",
+            "link": "https://t.me/hkbike_bot"
+        },
+        "6": {
+            "name": "Крипто Империум",
+            "desc": "Подпишись на канал",
+            "link": "https://t.me/CryptoImperiumTON"
+        }
+    },
+    "en": {
+        "1": {
+            "name": "Update channel",
+            "desc": "Subscribe to the main channel of the bot to avoid missing important updates from the future"
+        },
+        "5": {
+            "name": "Name of task 1",
+            "desc": "Description of task 1",
+            "link": "https://t.me/hkbike_bot"
+        },
+        "6": {
+            "name": "Crypto Imperium",
+            "desc": "Sub to channel",
+            "link": "https://t.me/CryptoImperiumTON"
+        }
     }
-  },
-
-  "en": {
-    "1": {
-      "name": "Update channel",
-      "desc": "Subscribe to the main channel of the bot to avoid missing important updates from the future"
-    }
-  }
 }

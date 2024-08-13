@@ -1,12 +1,5 @@
-<<<<<<< HEAD
 aiofiles==23.2.1
 aioflask==0.4.0
 aiogram==2.19
 aiohttp
 asyncpg==0.29.0
-=======
-aiogram==2.25.1
-asyncpg
-quart
-aiohttp
->>>>>>> origin/main

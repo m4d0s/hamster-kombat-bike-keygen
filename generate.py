@@ -36,7 +36,7 @@ def set_work_proxy(proxy:str, work=True):
             return
     logger.warning(f"Прокси {proxy} не найден в списке.")
 
-def get_logger(file_level=logging.DEBUG, console_level=logging.DEBUG, base_level=logging.DEBUG):
+def get_logger(file_level=logging.DEBUG, console_level=logging.INFO, base_level=logging.DEBUG):
     # Создаем логгер
     logger = logging.getLogger("logger")
     logger.setLevel(base_level)  # Устанавливаем базовый уровень логирования
@@ -127,6 +127,7 @@ async def get_key(session, game_key):
     
     if DEBUG_MODE:
         await asyncio.sleep(randint(config['DEBUG_DELAY'][0], config['DEBUG_DELAY'][1]) / 1000)
+        game_key = 'C0D3'
         return config['DEBUG_KEY'] + "-" + "".join([random.choice("0123456789ABCDE") for _ in range(16)])
         
     game_config = config['EVENTS'][game_key]
