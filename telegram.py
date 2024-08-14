@@ -9,7 +9,7 @@ from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ParseMode
 from aiogram.utils.exceptions import (MessageNotModified, MessageToDeleteNotFound, InvalidQueryID, ChatNotFound,
                                       BotBlocked, MessageIsTooLong, MessageToEditNotFound, MessageCantBeDeleted,
-                                      BadRequest, MessageCantBeEdited)
+                                      BadRequest, MessageCantBeEdited, Message)
 
 from generate import generate_loading_bar, get_key, logger
 from database import (insert_key_generation, get_last_user_key, get_all_dev, get_all_user_ids, now, get_promotions,
@@ -197,7 +197,7 @@ async def try_to_delete(chat_id:int, message_id:int) -> bool:
     except MessageCantBeDeleted:
         return False
     except Exception as e:
-        logger.error(f'Error deleting message in chat {chat_id}: {e}')
+        logger.debug(f'Error deleting message in chat {chat_id}: {e}')
         return False
     
 async def try_to_edit(text:str, chat_id:int, message_id:int) -> bool:
@@ -212,7 +212,7 @@ async def try_to_edit(text:str, chat_id:int, message_id:int) -> bool:
     except MessageCantBeEdited:
         return False
     except Exception as e:
-        logger.error(f'Error editing message in chat {chat_id}: {e}')
+        logger.debug(f'Error editing message in chat {chat_id}: {e}')
         return False
     
 async def send_error_message(chat_id:int, message:str, e = Exception('')) -> types.Message:
