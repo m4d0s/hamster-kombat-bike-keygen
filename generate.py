@@ -36,7 +36,7 @@ def set_work_proxy(proxy:str, work=True):
             return
     logger.warning(f"Прокси {proxy} не найден в списке.")
 
-def get_logger(file_level=logging.DEBUG, console_level=logging.INFO, base_level=logging.DEBUG):
+def get_logger(file_level=logging.DEBUG, console_level=logging.DEBUG, base_level=logging.DEBUG):
     # Создаем логгер
     logger = logging.getLogger("logger")
     logger.setLevel(base_level)  # Устанавливаем базовый уровень логирования
@@ -139,7 +139,7 @@ async def get_key(session, game_key):
     body = {
         'appToken': game_config['APP_TOKEN'],
         'clientId': client_id,
-        'clientOrigin': ['ios','android'].pop(random.randint(0,1))
+        'clientOrigin': 'ios'
     }
     login_client_data = await fetch_api(session, '/promo/login-client', body)
     loading = loading + 1 
@@ -149,6 +149,8 @@ async def get_key(session, game_key):
     promo_code = None
 
     for attempt in range(config['MAX_RETRY']):
+        asyncio.sleep(config['DELAY'])
+        logger.debug(f"Attempt {attempt + 1} of {config['MAX_RETRY']} for {game_key}...")
         body = {
             'promoId': game_config['PROMO_ID'],
             'eventId': str(uuid.uuid4()),

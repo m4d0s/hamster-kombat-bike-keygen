@@ -58,7 +58,7 @@ async def get_cached_data(user_id:int) -> tuple:
     config = await get_cached(user_id, pool=POOL)
     config = config if config is not None else cache_default
     
-    config['process'] = config['process'] if config['process'] else True
+    config['process'] = config['process'] if 'process' in config else True
     config['lang'] = user['lang'] if user and user['lang'] else 'en'
     config['right'] = user['right'] if user and user['right'] else 0
     
@@ -97,14 +97,15 @@ async def update_loadbar(chat_id:int, game_key:str) -> None:
         text = generate_loading_bar(progress=loading, max=sec)
         
         time = translate[cache['lang']]['generate_key'][0].replace('{mins}', format_remaining_time(now() + sec))
-        plus_text = translate[cache['lang']]['generate_key'][7].replace('{key}', game_key) if loading > sec else ''
+        plus_text = translate[cache['lang']]['generate_key'][7].replace('{key}', game_key) if loading >= sec else ''
         full = time + '\n\n' + text + '\n' + plus_text
         try:
             await try_to_edit(full, chat_id, cache['loading'])
         except MessageNotModified:
             pass
-        loading += 1000 + random.randint(0, 100)
-        await asyncio.sleep(1)
+        delay = (1 + random.random()) / 2
+        loading += delay
+        await asyncio.sleep(delay)
         cache = await get_cached_data(chat_id) ##cache
     cache['process'] = True
     loading = sec
@@ -194,6 +195,9 @@ async def try_to_delete(chat_id:int, message_id:int) -> bool:
         return False
     except MessageCantBeDeleted:
         return False
+    except Exception as e:
+        logger.error(f'Error deleting message in chat {chat_id}: {e}')
+        return False
     
 async def try_to_edit(text:str, chat_id:int, message_id:int) -> bool:
     if message_id is None or message_id == 0:
@@ -203,6 +207,9 @@ async def try_to_edit(text:str, chat_id:int, message_id:int) -> bool:
         await bot.edit_message_text(text, chat_id, message_id, parse_mode=ParseMode.HTML)
         return True
     except MessageToEditNotFound:
+        return False
+    except Exception as e:
+        logger.error(f'Error editing message in chat {chat_id}: {e}')
         return False
     
 async def send_error_message(chat_id:int, message:str, e = Exception('')) -> types.Message:
@@ -222,6 +229,11 @@ async def new_message(message: str, chat_id: int) -> types.Message:
         return await bot.send_message(text=html_back_escape(message), chat_id=chat_id, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
     except BotBlocked:
         logger.warning("Bot was blocked by user ({user_id})".format(user_id=chat_id))
+    except ChatNotFound:
+        logger.warning("Chat ({user_id}) not found".format(user_id=chat_id))
+    except Exception as e:
+        logger.error(f'Error sending message in chat {chat_id}: {e}')
+        return
         
 async def send_message_to_user(user_id:int, text: str, keyboard: InlineKeyboardMarkup) -> None:
     bot_info = await bot.get_me()
@@ -557,7 +569,7 @@ async def generate_key(callback_query: types.CallbackQuery) -> None:
         await set_cached_data(message.chat.id, cache) ##write
             
     await set_cached_data(message.chat.id, cache) ##write
-    await try_to_delete(chat_id=message.chat.id, message_id=cache['error'])
+    # await try_to_delete(chat_id=message.chat.id, message_id=cache['error'])
     await asyncio.sleep(delay)
     await send_welcome(callback_query.message)
 
