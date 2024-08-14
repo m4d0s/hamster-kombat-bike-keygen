@@ -607,7 +607,7 @@ async def get_key_limit(user:int, default=json_config['COUNT']):
     if len(user_tasks) < completed:
         if cache['error']:
             await try_to_delete(user, cache['error'])
-        ERROR_MES = await new_message(translate[cache['lang']]['get_key_limit'][0]. replace('{num}', completed - len(user_tasks)), user)
+        ERROR_MES = await new_message(translate[cache['lang']]['get_key_limit'][0]. replace('{num}', str(completed - len(user_tasks))), user)
         cache['tasks'] = len(user_tasks)
         cache['error'] = ERROR_MES.message_id
     cache['tasks'] = len(user_tasks)
