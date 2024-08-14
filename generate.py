@@ -149,7 +149,7 @@ async def get_key(session, game_key):
     promo_code = None
 
     for attempt in range(config['MAX_RETRY']):
-        asyncio.sleep(config['DELAY'])
+        # asyncio.sleep(config['DELAY'])
         logger.debug(f"Attempt {attempt + 1} of {config['MAX_RETRY']} for {game_key}...")
         body = {
             'promoId': game_config['PROMO_ID'],

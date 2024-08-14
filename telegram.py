@@ -89,7 +89,8 @@ async def update_loadbar(chat_id:int, game_key:str) -> None:
     if DEBUG:
         sec = json_config['DEBUG_DELAY'][1] // 1000
     else:
-        sec = json_config['EVENTS'][game_key]['EVENTS_DELAY'][1] * 15 // 1000 // 2
+        sec = json_config['EVENTS'][game_key]['EVENTS_DELAY'][1] * 15 // 1000 // 5
+        # max_sec = json_config['EVENTS'][game_key]['EVENTS_DELAY'][1] * 15
     loading = 0
     cache['process'] = False
     await set_cached_data(chat_id, cache) ##write
