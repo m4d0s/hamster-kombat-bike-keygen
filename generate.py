@@ -36,7 +36,7 @@ def set_work_proxy(proxy:str, work=True):
             return
     logger.warning(f"Прокси {proxy} не найден в списке.")
 
-def get_logger(file_level=logging.DEBUG, console_level=logging.DEBUG, base_level=logging.DEBUG):
+def get_logger(file_level=logging.DEBUG, console_level=logging.INFO, base_level=logging.DEBUG):
     # Создаем логгер
     logger = logging.getLogger("logger")
     logger.setLevel(base_level)  # Устанавливаем базовый уровень логирования
