@@ -9,7 +9,7 @@ from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ParseMode
 from aiogram.utils.exceptions import (MessageNotModified, MessageToDeleteNotFound, InvalidQueryID, ChatNotFound,
                                       BotBlocked, MessageIsTooLong, MessageToEditNotFound, MessageCantBeDeleted,
-                                      BadRequest)
+                                      BadRequest, MessageCantBeEdited)
 
 from generate import generate_loading_bar, get_key, logger
 from database import (insert_key_generation, get_last_user_key, get_all_dev, get_all_user_ids, now, get_promotions,
@@ -208,6 +208,8 @@ async def try_to_edit(text:str, chat_id:int, message_id:int) -> bool:
         await bot.edit_message_text(text, chat_id, message_id, parse_mode=ParseMode.HTML)
         return True
     except MessageToEditNotFound:
+        return False
+    except MessageCantBeEdited:
         return False
     except Exception as e:
         logger.error(f'Error editing message in chat {chat_id}: {e}')
