@@ -91,36 +91,38 @@ async def delay(ms) -> None:
     logger.debug(f"Waiting {ms}ms")
     await asyncio.sleep(ms / 1000)
 
-async def fetch_api(session:aiohttp.ClientSession, path: str, body:dict, auth:str = None) -> dict:
+async def fetch_api(session: aiohttp.ClientSession, path: str, body: dict, auth: str = None) -> dict:
     url = f'https://api.gamepromo.io{path}'
-    headers = {}
+    headers = {'content-type': 'application/json'}
 
     if auth:
         headers['authorization'] = f'Bearer {auth}'
-    else:
-        headers['content-type'] = 'application/json'
+
     proxy = get_free_proxy()
 
-    async with session.post(url, headers=headers, json=body, proxy=proxy) as res:
-        logger.debug(f"Using proxy: {proxy}")
-        data = await res.text()
+    try:
+        async with session.post(url, headers=headers, json=body, proxy=proxy) as res:
+            if DEBUG_MODE:
+                logger.debug(f"Using proxy: {proxy}")
+                logger.debug(f'URL: {url}')
+                logger.debug(f'Headers: {headers}')
+                logger.debug(f'Body: {body}')
+                logger.debug(f'Response Status: {res.status}')
 
-        if DEBUG_MODE:
-            logger.debug(f'URL: {url}')
-            logger.debug(f'Headers: {headers}')
-            logger.debug(f'Body: {body}')
-            logger.debug(f'Response Status: {res.status}')
-            logger.debug(f'Response Body: {data}')
-        
+            if not res.ok:
+                await asyncio.sleep(10)
+                set_work_proxy(proxy, False)
+                raise Exception(f"{res.status} {res.reason}")
 
-        elif not res.ok:
-            await asyncio.sleep(10)
-            set_work_proxy(proxy, False)
-            raise Exception(f"{res.status} {res.reason}") #{data}")
-            
+            # Парсинг только JSON (экономия трафика)
+            response_data = await res.json()
+
+            return response_data
+
+    finally:
+        # Независимо от успеха или ошибки, освобождаем прокси
         set_work_proxy(proxy, False)
 
-        return await res.json()
 
 async def get_key(session, game_key):
     global loading, MAX_LOAD
