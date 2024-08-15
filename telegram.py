@@ -253,7 +253,7 @@ async def send_error_message(chat_id:int, message:str, e = Exception(''), only_d
     cache['process'] = True
     if cache['error']:
         await try_to_delete(chat_id, cache['error'])
-    logger.error(f'{traceback.format_stack()[-2]}\tError: {e.with_traceback(e.__traceback__)}')
+    logger.error(f'{traceback.format_stack()[-2]}\tError: {" ".join(e.args)}')
     ERROR_MESS = await bot.send_message(text=html_back_escape(message), chat_id=chat_id, parse_mode=ParseMode.HTML, disable_web_page_preview=True, reply_markup=keyboard)
     cache['error'] = ERROR_MESS.message_id
     await set_cached_data(chat_id, cache) ##write
@@ -639,7 +639,7 @@ async def get_key_limit(user:int, default=json_config['COUNT']):
             i += 1
     
     user_limit_keys = len(today_keys) if today_keys else 0
-    completed = cache['tasks'] if cache['tasks'] else 0
+    completed = int(cache['tasks']) if cache['tasks'] else 0
     
     if len(user_tasks) < completed:
         if cache['error']:
@@ -677,7 +677,7 @@ async def check_completed_tasks(user_id:int):
                 else:
                     logger.warning(f"Error with task \"{promos[promo]['name']}\" ({promos[promo]['check_id']}) not found")
         elif promos[promo]['control'] == 0:
-            if promo in used:
+            if int(promo) in used:
                 count[promo] = promos[promo]
     return count
 
