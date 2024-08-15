@@ -1027,7 +1027,6 @@ async def reply_to_task(message: types.Message) -> None:
     await set_cached_data(message.chat.id, cache) ##write
 
 @dp.message_handler(commands=['delete_task'])
-@dp.callback_query_handler(lambda c: c.data == 'delete_task')
 async def delete_task_message(message: types.Message) -> None:
     cache = await get_cached_data(message.chat.id) ##cache
     if not cache['process']:
@@ -1043,6 +1042,10 @@ async def delete_task_message(message: types.Message) -> None:
         keyboard.add(InlineKeyboardButton(text=tasks[task]['name'], callback_data=f'delete_task_{tasks[task]["id"]}')) 
     keyboard.add(InlineKeyboardButton(text=translate[cache['lang']]['process_callback_generate_tasks'][3], callback_data='main_menu'))
     await bot.send_message(chat_id=message.chat.id, text=text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
+ 
+@dp.callback_query_handler(lambda c: c.data == 'delete_task')
+async def delete_task_callback(callback_query: types.CallbackQuery) -> None:
+    await delete_task_message(callback_query.message)
  
 @dp.callback_query_handler(lambda c: c.data.startswith('delete_task_'))
 async def process_callback_delete_task(callback_query: types.CallbackQuery) -> None:
