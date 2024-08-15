@@ -194,15 +194,27 @@ async def update_report(chat_id: int,
             checker_channel = None
         except Exception as e:
             send_error_message(chat_id, "Channels to report not found or something else happened, check logs", e, True) 
+        try:
+            bot_info = await bot.get_me()
+        except Exception as e:
+            send_error_message(chat_id, "Bot not found or something else happened, check logs", e, True)
+            bot_info = None
         
-        if not warning:    
-            text_to_send = '\n'.join([f'<pre>```{lang}\n{code}\n```</pre>' for lang, code in text.items() if lang != 'default']) \
-                + f"\n\n📢 <a href={checker_channel.invite_link}>{text[cache['lang']]}<a> | " if checker_channel else '' \
-                + f"💬 <a href={checker_group.invite_link}>{text[cache['lang']]}<a>" if checker_group else '' 
+        if not warning: 
+            strs = []
+            if checker_group:
+                strs.append(f"💬 <a href={checker_group.invite_link}>{translate[cache['lang']]['update_report'][1]}<a>")
+            if checker_channel:
+                strs.append(f"📢 <a href={checker_channel.invite_link}>{translate[cache['lang']]['update_report'][2]}<a>")
+            if bot_info:
+                strs.append(f"🤖 <a href=https://t.me/{bot_info.username}>{translate[cache['lang']]['update_report'][3]}<a>")  
+                
+            text_to_send = '\n'.join([f'<pre>```{lang}\n{code}\n```</pre>' for lang, code in text.items() if lang != 'default']) + "\n\n" \
+                + " | ".join(strs)
         
             if checker_channel is not None:
                 await new_message(text_to_send, checker_channel.id)
-            if checker_group is not None:
+            elif checker_group is not None:
                 await new_message(text_to_send, checker_group.id)
          
     cache['process'] = True
@@ -703,6 +715,8 @@ async def get_tasks_limit(user:int):
         elif all_tasks[promo]['control'] == 0:
             pass
     
+    if not transl:
+        transl = {}
     if cache['lang'] in transl and len(all_tasks) != 0:
         for x in transl[cache['lang']]:
             for y in transl[cache['lang']][x]:
