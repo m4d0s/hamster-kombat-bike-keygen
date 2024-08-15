@@ -93,7 +93,7 @@ async def delay(ms) -> None:
 
 async def fetch_api(session: aiohttp.ClientSession, path: str, body: dict, auth: str = None) -> dict:
     url = f'https://api.gamepromo.io{path}'
-    headers = {'content-type': 'application/json'}
+    headers = {'content-type': 'application/json', 'Accept-Encoding': 'gzip, deflate'}
 
     if auth:
         headers['authorization'] = f'Bearer {auth}'

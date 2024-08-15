@@ -85,7 +85,7 @@ async def get_promotions(pool=POOL):
             rows = await conn.fetch(f'SELECT * FROM "{HAMSTER}".promo')
     
     # Преобразование каждой строки в словарь
-    result = {row['id']:dict(row) for row in rows}
+    result = {str(row['id']):dict(row) for row in rows}
     return result
 
 async def insert_task(task: dict, check=1, pool=POOL) -> None:
@@ -217,8 +217,8 @@ async def get_cached_data(user_id:int, pool=POOL) -> dict:
     async with pool.acquire() as conn:
         async with conn.transaction():
             rows = await conn.fetch(query, num)
-
-    cached_data = {key: value for key, value in zip(rows[0].keys(), rows[0].values())}
+    
+    cached_data = {key: value for key, value in zip(rows[0].keys(), rows[0].values())} if rows else None
     return cached_data
 
 async def update_cache_process(pool=POOL) -> list:
@@ -416,7 +416,7 @@ def format_remaining_time(target_time: int, pref=" ago", reverse=False) -> str:
     if hours > 0:
         return f"{int(hours)} hours {int(minutes)} minutes{prefix}"
     elif minutes > 0:
-        return f"{int(minutes)} minutes{prefix}"
+        return f"{int(minutes)} minutes{prefix} {int(seconds)} seconds"
     else:
         return f"{int(seconds)} seconds{prefix}"
 

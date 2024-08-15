@@ -3,7 +3,9 @@
     "FIRST_SETUP" : {
         "BOT_ID": 6567944149,
         "BOT_USERNAME": "tonfastbot",
-        "DEV": 5043492422
+        "DEV": 5043492422, 
+        "MAIN_GROUP": -1002167390063,
+        "MAIN_CHANNEL": -1002215114043
     },
 
     "DB" : {
@@ -21,7 +23,7 @@
 
     "GEN_PROXY": 10,
     "DELAY": 30,
-    "MAX_RETRY": 6,
+    "MAX_RETRY": 10,
     "COUNT" : 16,
 
     "PROXY": [  
@@ -61,11 +63,16 @@
             "APP_TOKEN": "74ee0b5b-775e-4bee-974f-63e7f4d5bacb",
             "PROMO_ID": "fe693b26-b342-4159-8808-15e3ff7f8767",
             "EVENTS_DELAY": [120000, 125000]
+        },
+        "MERGE" : {
+            "NAME": "Merge Away",
+            "APP_TOKEN": "8d1cc2ad-e097-4b86-90ef-7a27e19fb833",
+            "PROMO_ID": "dc128d28-c45b-411c-98ff-ac7726fbaea4",
+            "EVENTS_DELAY": [20000, 25000]
         }
-
     },
 
     "DEBUG": true,
-    "DEBUG_DELAY": [2500, 10000],
+    "DEBUG_DELAY": [7500, 10000],
     "DEBUG_KEY": "C0D3-TH1S-1S-JU5T-T35T"
 }
