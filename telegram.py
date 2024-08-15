@@ -279,7 +279,8 @@ async def send_error_message(chat_id:int, message:str, e = None, only_dev = Fals
     if cache['error']:
         await try_to_delete(chat_id, cache['error'])
     if e is not None:
-        logger.error(f'{traceback.format_stack()[-2]}\tError: {e}')
+        err_t = f'Error: {e}' if str(e) else ''
+        logger.error(f'{traceback.format_stack()[-2]}\t{err_t}')
     ERROR_MESS = await bot.send_message(text=html_back_escape(message), chat_id=chat_id, parse_mode=ParseMode.HTML, disable_web_page_preview=True, reply_markup=keyboard)
     cache['error'] = ERROR_MESS.message_id
     await set_cached_data(chat_id, cache) ##write
@@ -986,6 +987,10 @@ async def reply_to_task(message: types.Message) -> None:
     
     with open('tasks.json', 'r', encoding='utf-8') as f:
         exist_dict_task = json.loads(f.read())
+    
+    for lang in translate:
+        if lang not in exist_dict_task:
+            exist_dict_task[lang] = {}
     
     for key, value in dict_task.items():
         exist_dict_task[key][str(num)] = value
