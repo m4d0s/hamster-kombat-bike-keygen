@@ -772,8 +772,11 @@ async def process_callback_generate_tasks(callback_query: types.CallbackQuery) -
         mark = '✅ ' if str(task) in used else ''
         inline_btn = InlineKeyboardButton(text=mark + all[task]['name'], callback_data=f'generate_task_{task}')
         keyboard.add(inline_btn)
+    if cache['right'] > 3-1:
+        keyboard.add(InlineKeyboardButton(text=translate[cache['lang']]['process_callback_generate_tasks'][6], callback_data='delete_task'))
     keyboard.add(InlineKeyboardButton(text=translate[cache['lang']]['process_callback_generate_tasks'][5], callback_data='add_task'))
     keyboard.add(InlineKeyboardButton(text=translate[cache['lang']]['process_callback_generate_tasks'][3], callback_data='main_menu'))
+
 
     WELCOME_MESS = await bot.send_message(text=text, chat_id=message.chat.id, parse_mode=ParseMode.HTML, reply_markup=keyboard, disable_web_page_preview=True)
     cache['welcome'] = WELCOME_MESS.message_id
@@ -1024,6 +1027,7 @@ async def reply_to_task(message: types.Message) -> None:
     await set_cached_data(message.chat.id, cache) ##write
 
 @dp.message_handler(commands=['delete_task'])
+@dp.callback_query_handler(lambda c: c.data == 'delete_task')
 async def delete_task_message(message: types.Message) -> None:
     cache = await get_cached_data(message.chat.id) ##cache
     if not cache['process']:
