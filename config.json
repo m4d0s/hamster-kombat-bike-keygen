@@ -1,8 +1,8 @@
 {
-    "API_TOKEN": "6567944149:AAE8bPXXugVGg67sqm5XNi4vcH2dSDLqoo4",
+    "API_TOKEN": "7371621001:AAHsVcx8uNHDUoMp61kfTO27GJQV6IJEnwc",
     "FIRST_SETUP" : {
-        "BOT_ID": 6567944149,
-        "BOT_USERNAME": "tonfastbot",
+        "BOT_ID": 7371621001,
+        "BOT_USERNAME": "hkbike_bot",
         "DEV": 5043492422, 
         "MAIN_GROUP": -1002167390063,
         "MAIN_CHANNEL": -1002215114043
@@ -10,10 +10,10 @@
 
     "DB" : {
         "HOST": "127.0.0.1",
-        "PORT": 5432,
-        "USER": "postgres",
-        "PASSWORD": "password",
-        "NAME": "postgres",
+        "PORT": 5433,
+        "USER": "myuser",
+        "PASSWORD": "7IBkzyuOraiK",
+        "NAME": "hamster",
         "SSL": false
     },
 
@@ -26,18 +26,7 @@
     "MAX_RETRY": 10,
     "COUNT" : 16,
 
-    "PROXY": [  
-                "http://leucois9ux-mobile-country-GB-state-6269131-city-2644210-hold-session-session-669150dcb2dc8:eThapYQvdMX5Tttn@93.190.138.107:9999",
-                "http://leucois9ux-mobile-country-GB-state-6269131-city-2641673-hold-session-session-669150ea5b3ca:eThapYQvdMX5Tttn@93.190.138.107:9999",
-                "http://leucois9ux-mobile-country-GB-state-6269131-city-2641170-hold-session-session-66915103a5803:eThapYQvdMX5Tttn@93.190.138.107:9999",
-                "http://leucois9ux-mobile-country-GB-state-6269131-city-2643123-hold-session-session-6691514c10fbc:eThapYQvdMX5Tttn@93.190.138.107:9999",
-                "http://leucois9ux-mobile-country-GB-state-6269131-city-2654993-hold-session-session-669152a4a998a:eThapYQvdMX5Tttn@93.190.138.107:9999",
-                "http://leucois9ux-mobile-country-GB-state-6269131-city-6545250-hold-session-session-669152b3be731:eThapYQvdMX5Tttn@93.190.138.107:9999",
-                "http://leucois9ux-mobile-country-GB-state-6269131-city-3333200-hold-session-session-669152c227078:eThapYQvdMX5Tttn@93.190.138.107:9999",
-                "http://leucois9ux-mobile-country-GB-state-6269131-city-2634812-hold-session-session-669152d1ae60b:eThapYQvdMX5Tttn@93.190.138.107:9999",
-                "http://leucois9ux-mobile-country-GB-state-6269131-city-2643743-hold-session-session-669153104265b:eThapYQvdMX5Tttn@93.190.138.107:9999",
-                "http://leucois9ux-mobile-country-GB-state-6269131-city-2644688-hold-session-session-6691531b21756:eThapYQvdMX5Tttn@93.190.138.107:9999"
-            ],
+    "PROXY": ["http://leucois9ux-res-country-GB-state-6269131-city-2643743-hold-session-session-66bc949d550c8:eThapYQvdMX5Tttn@185.21.60.181:9999","http://leucois9ux-res-country-GB-state-6269131-city-2643743-hold-session-session-66bc949d586ad:eThapYQvdMX5Tttn@93.190.138.107:9999","http://leucois9ux-res-country-GB-state-6269131-city-2643743-hold-session-session-66bc949d5a7df:eThapYQvdMX5Tttn@93.190.142.139:9999","http://leucois9ux-res-country-GB-state-6269131-city-2643743-hold-session-session-66bc949d5c6b8:eThapYQvdMX5Tttn@89.39.106.148:9999","http://leucois9ux-res-country-GB-state-6269131-city-2643743-hold-session-session-66bc949d5e603:eThapYQvdMX5Tttn@93.190.142.57:9999","http://leucois9ux-res-country-GB-state-6269131-city-2643123-hold-session-session-66bc94ad94e71:eThapYQvdMX5Tttn@185.21.60.181:9999","http://leucois9ux-res-country-GB-state-6269131-city-2643123-hold-session-session-66bc94ad98647:eThapYQvdMX5Tttn@93.190.138.107:9999","http://leucois9ux-res-country-GB-state-6269131-city-2643123-hold-session-session-66bc94ad9a705:eThapYQvdMX5Tttn@93.190.142.139:9999","http://leucois9ux-res-country-GB-state-6269131-city-2643123-hold-session-session-66bc94ad9c97c:eThapYQvdMX5Tttn@89.39.106.148:9999","http://leucois9ux-res-country-GB-state-6269131-city-2643123-hold-session-session-66bc94ad9ecfc:eThapYQvdMX5Tttn@93.190.142.57:9999","http://leucois9ux-res-country-GB-state-6269131-city-6545250-hold-session-session-66bc94dd40a5d:eThapYQvdMX5Tttn@185.21.60.181:9999","http://leucois9ux-res-country-GB-state-6269131-city-6545250-hold-session-session-66bc94dd446af:eThapYQvdMX5Tttn@93.190.138.107:9999","http://leucois9ux-res-country-GB-state-6269131-city-6545250-hold-session-session-66bc94dd46c30:eThapYQvdMX5Tttn@93.190.142.139:9999","http://leucois9ux-res-country-GB-state-6269131-city-6545250-hold-session-session-66bc94dd48cfc:eThapYQvdMX5Tttn@89.39.106.148:9999","http://leucois9ux-res-country-GB-state-6269131-city-6545250-hold-session-session-66bc94dd4accc:eThapYQvdMX5Tttn@93.190.142.57:9999","http://leucois9ux-res-country-US-state-5332921-city-5368361-hold-session-session-66bc94f33ae09:eThapYQvdMX5Tttn@185.21.60.181:9999","http://leucois9ux-res-country-US-state-5332921-city-5368361-hold-session-session-66bc94f33de2e:eThapYQvdMX5Tttn@93.190.138.107:9999","http://leucois9ux-res-country-US-state-5332921-city-5368361-hold-session-session-66bc94f33fb83:eThapYQvdMX5Tttn@93.190.142.139:9999","http://leucois9ux-res-country-US-state-5332921-city-5368361-hold-session-session-66bc94f3416e7:eThapYQvdMX5Tttn@89.39.106.148:9999","http://leucois9ux-res-country-US-state-5332921-city-5368361-hold-session-session-66bc94f343336:eThapYQvdMX5Tttn@93.190.142.57:9999","http://leucois9ux-res-country-US-state-4155751-city-4164138-hold-session-session-66bc9505157cb:eThapYQvdMX5Tttn@185.21.60.181:9999","http://leucois9ux-res-country-US-state-4155751-city-4164138-hold-session-session-66bc950518cb6:eThapYQvdMX5Tttn@93.190.138.107:9999","http://leucois9ux-res-country-US-state-4155751-city-4164138-hold-session-session-66bc95051acd0:eThapYQvdMX5Tttn@93.190.142.139:9999","http://leucois9ux-res-country-US-state-4155751-city-4164138-hold-session-session-66bc95051c9f4:eThapYQvdMX5Tttn@89.39.106.148:9999","http://leucois9ux-res-country-US-state-4155751-city-4164138-hold-session-session-66bc95051eade:eThapYQvdMX5Tttn@93.190.142.57:9999","http://leucois9ux-res-country-US-state-4736286-city-4684888-hold-session-session-66bc9517e6b4f:eThapYQvdMX5Tttn@185.21.60.181:9999","http://leucois9ux-res-country-US-state-4736286-city-4684888-hold-session-session-66bc9517eaa0b:eThapYQvdMX5Tttn@93.190.138.107:9999","http://leucois9ux-res-country-US-state-4736286-city-4684888-hold-session-session-66bc9517ed031:eThapYQvdMX5Tttn@93.190.142.139:9999","http://leucois9ux-res-country-US-state-4736286-city-4684888-hold-session-session-66bc9517ef292:eThapYQvdMX5Tttn@89.39.106.148:9999","http://leucois9ux-res-country-US-state-4736286-city-4684888-hold-session-session-66bc9517f1505:eThapYQvdMX5Tttn@93.190.142.57:9999","http://leucois9ux-res-country-US-state-5128638-city-5128581-hold-session-session-66bc9538a43f3:eThapYQvdMX5Tttn@185.21.60.181:9999","http://leucois9ux-res-country-US-state-5128638-city-5128581-hold-session-session-66bc9538a852a:eThapYQvdMX5Tttn@93.190.138.107:9999","http://leucois9ux-res-country-US-state-5128638-city-5128581-hold-session-session-66bc9538aaa45:eThapYQvdMX5Tttn@93.190.142.139:9999","http://leucois9ux-res-country-US-state-5128638-city-5128581-hold-session-session-66bc9538acb7e:eThapYQvdMX5Tttn@89.39.106.148:9999","http://leucois9ux-res-country-US-state-5128638-city-5128581-hold-session-session-66bc9538aec97:eThapYQvdMX5Tttn@93.190.142.57:9999","http://leucois9ux-res-country-IN-state-1264418-city-1275339-hold-session-session-66bc955b3b0b6:eThapYQvdMX5Tttn@185.21.60.181:9999","http://leucois9ux-res-country-IN-state-1264418-city-1275339-hold-session-session-66bc955b3e8c9:eThapYQvdMX5Tttn@93.190.138.107:9999","http://leucois9ux-res-country-IN-state-1264418-city-1275339-hold-session-session-66bc955b40a38:eThapYQvdMX5Tttn@93.190.142.139:9999","http://leucois9ux-res-country-IN-state-1264418-city-1275339-hold-session-session-66bc955b42a3b:eThapYQvdMX5Tttn@89.39.106.148:9999","http://leucois9ux-res-country-IN-state-1264418-city-1275339-hold-session-session-66bc955b44a23:eThapYQvdMX5Tttn@93.190.142.57:9999","http://leucois9ux-res-country-RU-state-524894-city-524901-hold-session-session-66bc95761d504:eThapYQvdMX5Tttn@185.21.60.181:9999","http://leucois9ux-res-country-RU-state-524894-city-524901-hold-session-session-66bc9576205a7:eThapYQvdMX5Tttn@93.190.138.107:9999","http://leucois9ux-res-country-RU-state-524894-city-524901-hold-session-session-66bc95762253a:eThapYQvdMX5Tttn@93.190.142.139:9999","http://leucois9ux-res-country-RU-state-524894-city-524901-hold-session-session-66bc95762433b:eThapYQvdMX5Tttn@89.39.106.148:9999","http://leucois9ux-res-country-RU-state-524894-city-524901-hold-session-session-66bc957625ebf:eThapYQvdMX5Tttn@93.190.142.57:9999","http://leucois9ux-res-country-RU-state-536203-city-498817-hold-session-session-66bc958954bff:eThapYQvdMX5Tttn@185.21.60.181:9999","http://leucois9ux-res-country-RU-state-536203-city-498817-hold-session-session-66bc958958a51:eThapYQvdMX5Tttn@93.190.138.107:9999","http://leucois9ux-res-country-RU-state-536203-city-498817-hold-session-session-66bc95895ad05:eThapYQvdMX5Tttn@93.190.142.139:9999","http://leucois9ux-res-country-RU-state-536203-city-498817-hold-session-session-66bc95895cce5:eThapYQvdMX5Tttn@89.39.106.148:9999","http://leucois9ux-res-country-RU-state-536203-city-498817-hold-session-session-66bc95895eb5f:eThapYQvdMX5Tttn@93.190.142.57:9999"],
 
     "EVENTS":{
         "BIKE" : {
@@ -72,7 +61,7 @@
         }
     },
 
-    "DEBUG": true,
+    "DEBUG": false,
     "DEBUG_DELAY": [7500, 10000],
     "DEBUG_KEY": "C0D3-TH1S-1S-JU5T-T35T"
 }

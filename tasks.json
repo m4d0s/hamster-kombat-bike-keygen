@@ -1,36 +1,18 @@
 {
   "ru": {
-    "1": {
+    "11": {
       "name": "Канал обновлений",
-      "desc": "Подпишись на главный канал обновления бота, чтобы не упустить ничего важного из будущих обновлений"
-    },
-    "6": {
-      "name": "Крипто Империум",
-      "desc": "Подпишись на канал",
-      "link": "https://t.me/CryptoImperiumTON"
-    },
-    "8": {
-      "name": "plutoner",
-      "desc": "Подписаться на канал",
-      "link": "https://t.me/plu_toners",
-      "check_id": 6567944149
+      "desc": "Подпишитесь на канал, чтобы первыми узнавать о будущих обновлениях этого бота",
+      "link": "https://t.me/hkbike_channel",
+      "check_id": -1002215114043
     }
   },
   "en": {
-    "1": {
+    "11": {
       "name": "Update channel",
-      "desc": "Subscribe to the main channel of the bot to avoid missing important updates from the future"
-    },
-    "6": {
-      "name": "Crypto Imperium",
-      "desc": "Sub to channel",
-      "link": "https://t.me/CryptoImperiumTON"
-    },
-    "8": {
-      "name": "plutoner",
-      "desc": "Sub to channel",
-      "link": "https://t.me/plu_toners",
-      "check_id": -1002020659290
+      "desc": "Subscribe to this bot to be first to see updates of this bot",
+      "link": "https://t.me/+KXHlwsa-j5c3MGU6",
+      "check_id": -1002215114043
     }
   }
 }
