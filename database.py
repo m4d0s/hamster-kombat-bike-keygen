@@ -99,7 +99,7 @@ async def insert_task(task: dict, check=1, pool=POOL) -> None:
             record = await conn.fetchrow(
                 f'INSERT INTO "{HAMSTER}".promo (name, "desc", link, check_id, control) ' +
                 'VALUES ($1, $2, $3, $4, $5) ' +
-                'ON CONFLICT (link) DO UPDATE SET name = EXCLUDED.name, "desc" = EXCLUDED."desc", link = EXCLUDED.link, check_id = EXCLUDED.check_id, control = EXCLUDED.control ' +
+                'ON CONFLICT (check_id) DO UPDATE SET name = EXCLUDED.name, "desc" = EXCLUDED."desc", link = EXCLUDED.link, control = EXCLUDED.control ' +
                 'RETURNING id, name, "desc", link, check_id, control',
                 task['name'], task['desc'], task['link'], task['check_id'], check
             )

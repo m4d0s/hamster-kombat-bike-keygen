@@ -945,13 +945,24 @@ async def reply_to_task(message: types.Message) -> None:
             dict_task[lang] = {t[0].lower():t[1] for t in task_match}
             dict_task[lang]['check_id'] = dict_task[lang].pop('id', None) if 'id' in dict_task[lang] else bot_info.id
             dict_task[lang]['check_id'] = int(dict_task[lang]['check_id'])
+            if 'id' in dict_task[lang]:
+                checker = await bot.get_chat(dict_task[lang]['id'])
+                dict_task[lang]['link'] = checker.invite_link
+                dict_task[lang]['check_id'] = checker.id
+            elif '+' not in dict_task[lang]['link'].split('/')[3] and 'joinchat' not in dict_task[lang]['link']: 
+                checker = await bot.get_chat('@' + dict_task[lang]['link'].split('/')[3])
+                dict_task[lang]['link'] = checker.invite_link
+                dict_task[lang]['check_id'] = checker.id
         if first:
             first = False
             dict_task['default'] = dict_task[lang]
     
     db_task = dict_task.pop('default', None)
     try:
-        checker = await bot.get_chat('@' + db_task['link'].split('/')[3])
+        if 'id' in db_task:
+            checker = await bot.get_chat(db_task['id'])
+        else: 
+            checker = await bot.get_chat('@' + db_task['link'].split('/')[3])
         db_task['check_id'] = checker.id
         db_task['link'] = checker.invite_link
         keyboard = InlineKeyboardMarkup()
