@@ -65,7 +65,16 @@ async def set_cached_data(user:int, data:dict, pool=POOL):
 async def get_cached_data(user_id:int) -> tuple:
     reload_config()
     user = await get_user(user_id, pool=POOL)
-    cache_default = {'user_id':0, 'welcome':0, 'loading':0, 'report':0, 'process':True, 'error':0, 'tasks': 0, 'lang': 'en'}
+    cache_default = {'user_id':None, 
+                     'welcome':None, 
+                     'loading':None, 
+                     'report':None, 
+                     'process':True, 
+                     'error':None, 
+                     'tasks': None, 
+                     'lang': 'en', 
+                     'addtask': None, 
+                     'deletetask': None}
     if not user:
         cache_default['user_id'] = user_id
         await set_cached_data(user_id, cache_default)
