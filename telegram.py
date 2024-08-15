@@ -20,6 +20,17 @@ from database import (insert_key_generation, get_last_user_key, get_all_dev, get
                       delete_task_by_id as delete_task)
 
 # Load configuration
+
+def reload_config():
+    global json_config, translate, transl
+    with open('config.json') as f:
+        json_config = json.load(f)
+    with open('localization.json') as f:
+        translate = json.load(f)
+    with open('tasks.json') as f:
+        transl = json.load(f)
+
+
 with open('config.json') as f:
     json_config = json.load(f)
 with open('localization.json') as f:
@@ -42,6 +53,7 @@ sem = asyncio.Semaphore(25)
 
 #Cache funcs
 async def set_cached_data(user:int, data:dict, pool=POOL):
+    reload_config()
     data_copy = data.copy()
     
     data_copy.pop('lang', None)
@@ -51,6 +63,7 @@ async def set_cached_data(user:int, data:dict, pool=POOL):
     await write_cached_data(user, data_copy, pool=pool) 
 
 async def get_cached_data(user_id:int) -> tuple:
+    reload_config()
     user = await get_user(user_id, pool=POOL)
     cache_default = {'user_id':0, 'welcome':0, 'loading':0, 'report':0, 'process':True, 'error':0, 'tasks': 0, 'lang': 'en'}
     if not user:
@@ -256,7 +269,7 @@ async def try_to_edit(text:str, chat_id:int, message_id:int) -> bool:
         logger.debug(f'Error editing message in chat {chat_id}: {e}')
         return False
     
-async def send_error_message(chat_id:int, message:str, e = Exception(''), only_dev = False) -> types.Message:
+async def send_error_message(chat_id:int, message:str, e:None|Exception, only_dev = False) -> types.Message:
     cache = await get_cached_data(chat_id) ##cache
     keyboard = InlineKeyboardMarkup().add(InlineKeyboardButton(translate[cache['lang']]['process_callback_generate_tasks'][3], callback_data='main_menu'))
     if only_dev and cache['right'] < 0:
@@ -265,7 +278,8 @@ async def send_error_message(chat_id:int, message:str, e = Exception(''), only_d
     cache['process'] = True
     if cache['error']:
         await try_to_delete(chat_id, cache['error'])
-    logger.error(f'{traceback.format_stack()[-2]}\tError: {" ".join(e.args)}')
+    if e is not None:
+        logger.error(f'{traceback.format_stack()[-2]}\tError: {" ".join(e.args)}')
     ERROR_MESS = await bot.send_message(text=html_back_escape(message), chat_id=chat_id, parse_mode=ParseMode.HTML, disable_web_page_preview=True, reply_markup=keyboard)
     cache['error'] = ERROR_MESS.message_id
     await set_cached_data(chat_id, cache) ##write
@@ -654,9 +668,10 @@ async def get_key_limit(user:int, default=json_config['COUNT']):
     completed = int(cache['tasks']) if cache['tasks'] else 0
     
     if len(user_tasks) < completed:
+        num_str = str(completed - len(user_tasks))
         if cache['error']:
             await try_to_delete(user, cache['error'])
-        ERROR_MES = await send_error_message(user, translate[cache['lang']]['get_key_limit'][0].replace('{num}', str(completed - len(user_tasks))))
+        ERROR_MES = await send_error_message(user, translate[cache['lang']]['get_key_limit'][0].replace('{num}', num_str))
         cache['tasks'] = len(user_tasks)
         cache['error'] = ERROR_MES.message_id
     cache['tasks'] = len(user_tasks)
@@ -714,7 +729,8 @@ async def get_tasks_limit(user:int):
         
         elif all_tasks[promo]['control'] == 0:
             pass
-    
+        
+    global transl
     if not transl:
         transl = {}
     if cache['lang'] in transl and len(all_tasks) != 0:
@@ -1059,6 +1075,7 @@ async def process_callback_other_games(callback_query: types.CallbackQuery) -> N
 
 #main
 if __name__ == '__main__':
+    reload_config()
     POOL = asyncio.get_event_loop().run_until_complete(get_pool())
     users_id = asyncio.get_event_loop().run_until_complete(update_cache_process(POOL))
     logger.info("Send warning message to everyone who tried to generate key before....")
