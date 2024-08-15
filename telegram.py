@@ -956,6 +956,7 @@ async def reply_to_task(message: types.Message) -> None:
         db_task['link'] = checker.invite_link
         keyboard = InlineKeyboardMarkup()
         keyboard.add(InlineKeyboardButton(text=translate[cache['lang']]['process_callback_generate_tasks'][3], callback_data='main_menu'))
+        send = True
         await bot.send_message(chat_id=message.chat.id, 
                                text=translate[cache['lang']]['add_task'][4], 
                                parse_mode=ParseMode.HTML,
@@ -992,7 +993,7 @@ async def reply_to_task(message: types.Message) -> None:
                                 text=translate[cache['lang']]['add_task'][4], 
                                 parse_mode=ParseMode.HTML,
                                 reply_markup=keyboard)
-        cache['welcome'] = WELCOME_MESS.message_id
+        cache['addtask'] = WELCOME_MESS.message_id
     
     with open('tasks.json', 'r', encoding='utf-8') as f:
         exist_dict_task = json.loads(f.read())
