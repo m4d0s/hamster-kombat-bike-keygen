@@ -269,7 +269,7 @@ async def try_to_edit(text:str, chat_id:int, message_id:int) -> bool:
         logger.debug(f'Error editing message in chat {chat_id}: {e}')
         return False
     
-async def send_error_message(chat_id:int, message:str, e:None|Exception, only_dev = False) -> types.Message:
+async def send_error_message(chat_id:int, message:str, e = None, only_dev = False) -> types.Message:
     cache = await get_cached_data(chat_id) ##cache
     keyboard = InlineKeyboardMarkup().add(InlineKeyboardButton(translate[cache['lang']]['process_callback_generate_tasks'][3], callback_data='main_menu'))
     if only_dev and cache['right'] < 0:
@@ -279,7 +279,7 @@ async def send_error_message(chat_id:int, message:str, e:None|Exception, only_de
     if cache['error']:
         await try_to_delete(chat_id, cache['error'])
     if e is not None:
-        logger.error(f'{traceback.format_stack()[-2]}\tError: {" ".join(e.args)}')
+        logger.error(f'{traceback.format_stack()[-2]}\tError: {e}')
     ERROR_MESS = await bot.send_message(text=html_back_escape(message), chat_id=chat_id, parse_mode=ParseMode.HTML, disable_web_page_preview=True, reply_markup=keyboard)
     cache['error'] = ERROR_MESS.message_id
     await set_cached_data(chat_id, cache) ##write
