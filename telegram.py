@@ -471,9 +471,12 @@ async def send_welcome(message: types.Message) -> None:
     inline_btn_generate = InlineKeyboardButton(translate[cache['lang']]['update_welcome_message'][0], callback_data='generate_menu')
     other_games = InlineKeyboardButton(text=translate[cache['lang']]['process_callback_generate_tasks'][4], callback_data='other_games')
     inline_tasks = InlineKeyboardButton(translate[cache['lang']]['update_welcome_message'][7], callback_data='generate_tasks')
+    inline_report = InlineKeyboardButton(translate[cache['lang']]['update_welcome_message'][9], callback_data='report')
     inline_kb = InlineKeyboardMarkup().add(inline_btn_generate)
     inline_kb.add(other_games)
     inline_kb.add(inline_tasks)
+    if cache['right'] > 0:
+        inline_kb.add(inline_report)
     today_keys = await get_all_user_keys_24h(user_id=message.chat.id, pool=POOL)
     user_limit_keys, global_limit_keys = await get_key_limit(user=message.chat.id)
     
