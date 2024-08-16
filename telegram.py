@@ -445,7 +445,7 @@ async def report(message: types.Message) -> None:
     pattern = re.compile(r'<pre>```(\w+)\n(.*?)\n```</pre>', re.DOTALL)
     transl = pattern.findall(text_without_buttons)
     if not transl:
-        pattern = re.compile(r'<pre><code class=\"language-(\w+)\">(.*?)<\/code><\/pre>', re.DOTALL)
+        pattern = re.compile(r'<pre><code class="language-(\w+)">(.*?)<\/code><\/pre>', re.DOTALL)
         transl = pattern.findall(text_without_buttons)
 
     # Обработка `transl`
