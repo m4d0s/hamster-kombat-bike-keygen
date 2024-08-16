@@ -197,7 +197,7 @@ async def get_all_user_keys_24h(user_id:id, pool=POOL, day=1) -> list:
             rows = await conn.fetch(progression_query, num, now() - 86400 * abs(day))
             # rows = await conn.fetch(regression_query, num, get_utc_time(0, 0, 0, True))
     
-    return [[row['key'], row['time'], row['type']] for row in rows] if rows and len(rows) > 0 else []
+    return [[row['key'], row['time'], row['type']] for row in rows] if rows is not None and len(rows) > 0 else []
 
 
 
