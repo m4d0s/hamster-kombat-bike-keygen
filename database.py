@@ -169,8 +169,8 @@ async def get_unused_key_of_type(key_type:str, pool=POOL, day = 1) -> str:
     if pool is None:
         pool = await get_pool()
     
-    progression_query = f'SELECT key FROM "{HAMSTER}".keys WHERE type = $1 AND used = false AND time > $2 ORDER BY time ASC LIMIT 1'
-    regression_query = f'SELECT key FROM "{HAMSTER}".keys WHERE type = $1 AND used = false AND time < $2 ORDER BY time ASC LIMIT 1'
+    progression_query = f'SELECT key FROM "{HAMSTER}".keys WHERE type = $1 AND used = false AND time < $2 ORDER BY time ASC LIMIT 1'
+    regression_query = f'SELECT key FROM "{HAMSTER}".keys WHERE type = $1 AND used = false AND time > $2 ORDER BY time ASC LIMIT 1'
     
     async with pool.acquire() as conn:
         async with conn.transaction():

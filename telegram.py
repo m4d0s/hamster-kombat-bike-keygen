@@ -560,6 +560,8 @@ async def process_callback_generate_menu(callback_query: types.CallbackQuery) ->
     
     await set_cached_data(message.chat.id, cache) ##write
 
+
+#keys funcs
 @dp.callback_query_handler(lambda c: c.data.startswith('generate_key_'))
 async def generate_key(callback_query: types.CallbackQuery) -> None:
     global DEBUG
@@ -647,9 +649,6 @@ async def generate_key(callback_query: types.CallbackQuery) -> None:
     await asyncio.sleep(delay)
     await send_welcome(callback_query.message)
 
-
-
-#keys funcs
 async def get_key_limit(user:int, default=json_config['COUNT']):
     cache = await get_cached_data(user)
     count = default
