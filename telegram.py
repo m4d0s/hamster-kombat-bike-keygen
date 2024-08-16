@@ -523,7 +523,7 @@ async def send_welcome(message: types.Message) -> None:
     
     text = text1 + text2 + text3
     try:
-        WELCOME_MESS = await new_message(text=text, chat_id=message.chat.id, keyboard=inline_kb)
+        WELCOME_MESS = await new_message(text=text, chat_id=message.chat.id, keyboard=inline_kb, disable_preview=False)
         cache['welcome'] = WELCOME_MESS.message_id
     except MessageIsTooLong:
         keys = '\n'.join([f'{type}:\t{key}\t({format_remaining_time(key_time, pref=translate[cache["lang"]]["format_remaining_time"][0])})' for key, key_time, type in user_limit_keys])
