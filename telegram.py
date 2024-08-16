@@ -121,8 +121,8 @@ async def update_loadbar(chat_id:int, game_key:str) -> None:
     while not cache['process']:
         text = generate_loading_bar(progress=loading, max=sec)
         
-        time = translate[cache['lang']]['generate_key'][0].replace('{mins}', format_remaining_time(now() + sec))
-        plus_text = translate[cache['lang']]['generate_key'][7].replace('{max}', format_remaining_time(now() + max_sec)) if loading >= sec else ''
+        time = translate[cache['lang']]['generate_key'][0].replace('{mins}', format_remaining_time(now() + sec, pref=cache['lang']))
+        plus_text = translate[cache['lang']]['generate_key'][7].replace('{max}', format_remaining_time(now() + max_sec, pref=cache['lang'])) if loading >= sec else ''
         full = time + '\n' + plus_text + '\n\n' + text 
         try:
             await try_to_edit(full, chat_id, cache['loading'])
@@ -503,14 +503,14 @@ async def send_welcome(message: types.Message) -> None:
     if today_keys:
         today_keys = sorted(today_keys, key=lambda x: x[1], reverse=True)
         if cheating:
-            text2 = '\n'.join([f'<b>{type}:</b> <code>{key}</code> ({format_remaining_time(key_time, pref=translate[cache["lang"]]["format_remaining_time"][0])})' 
+            text2 = '\n'.join([f'<b>{type}:</b> <code>{key}</code> ({format_remaining_time(key_time, pref=cache["lang"])})' 
                                for key, key_time, type in today_keys[:-lost_tries]])
-            text2 += '\n' + '\n'.join([f'<b>{type}:</b> <code>{hide_key(key)}</code> ({format_remaining_time(key_time, pref=translate[cache["lang"]]["format_remaining_time"][0])})' 
+            text2 += '\n' + '\n'.join([f'<b>{type}:</b> <code>{hide_key(key)}</code> ({format_remaining_time(key_time, pref=cache["lang"])})' 
                                for key, key_time, type in today_keys[len(today_keys)-lost_tries:]])
             text2 += '\n' + translate[cache['lang']]['update_welcome_message'][8]
             
         else:
-            text2 = '\n'.join([f'<b>{type}:</b> <code>{key}</code> ({format_remaining_time(key_time, pref=translate[cache["lang"]]["format_remaining_time"][0])})' 
+            text2 = '\n'.join([f'<b>{type}:</b> <code>{key}</code> ({format_remaining_time(key_time, pref=cache["lang"])})' 
                                for key, key_time, type in today_keys])
     else:
 
@@ -526,7 +526,7 @@ async def send_welcome(message: types.Message) -> None:
         WELCOME_MESS = await new_message(text=text, chat_id=message.chat.id, keyboard=inline_kb, disable_preview=False)
         cache['welcome'] = WELCOME_MESS.message_id
     except MessageIsTooLong:
-        keys = '\n'.join([f'{type}:\t{key}\t({format_remaining_time(key_time, pref=translate[cache["lang"]]["format_remaining_time"][0])})' for key, key_time, type in user_limit_keys])
+        keys = '\n'.join([f'{type}:\t{key}\t({format_remaining_time(key_time, pref=cache["lang"])})' for key, key_time, type in user_limit_keys])
         pseudo_file = create_pseudo_file(keys)
         text = text1 + f" <i>{translate[cache['lang']]['update_welcome_message'][6]}</i>" + text3
         WELCOME_MESS = await bot.send_document(chat_id=message.chat.id, document=pseudo_file, caption=text, parse_mode=ParseMode.HTML, reply_markup=inline_kb)

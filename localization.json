@@ -1,7 +1,7 @@
 {
     "ru": {
         "NAME": "Русский",
-        "format_remaining_time": [" назад"],
+        "format_remaining_time": ["назад", "часов", "минут", "секунд"],
         "update_loadbar": ["Генерация ключа..."],
         "update_report" : ["Отправляем сообщения всем пользователям...",
         "Чат",
@@ -75,7 +75,7 @@
 
     "en":{
         "NAME": "English",
-        "format_remaining_time": [" ago"],
+        "format_remaining_time": ["ago", "hours", "minutes", "seconds"],
         "update_loadbar": ["Generating key..."],
         "update_report" : ["Send messages to all users...",
         "Channel",

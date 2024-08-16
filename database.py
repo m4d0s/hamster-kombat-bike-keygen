@@ -163,30 +163,28 @@ async def get_last_user_key(user_id:int , pool=POOL) -> dict:
     
     return {key: value for key, value in zip(row.keys(), row.values())} if row else None
 
-async def get_unused_key_of_type(key_type:str, pool=POOL, day = 1) -> str:
+async def get_unused_key_of_type(key_type:str, pool=POOL, day = 1.0) -> str:
     if key_type is None:
         return
     if pool is None:
         pool = await get_pool()
     
-    progression_query = f'SELECT key FROM "{HAMSTER}".keys WHERE type = $1 AND used = false AND time < $2 ORDER BY time ASC LIMIT 1'
-    regression_query = f'SELECT key FROM "{HAMSTER}".keys WHERE type = $1 AND used = false AND time > $2 ORDER BY time ASC LIMIT 1'
+    progression_query = f'SELECT key FROM "{HAMSTER}".keys WHERE type = $1 AND used = false AND time > $2 ORDER BY time ASC LIMIT 1'
     
     async with pool.acquire() as conn:
         async with conn.transaction():
-            row = await conn.fetchrow(progression_query, key_type, now() )# - 86400 * abs(day))
+            row = await conn.fetchrow(progression_query, key_type, now()  - 86400 * abs(day))
             # row = await conn.fetchrow(regression_query, key_type, get_utc_time(0, 0, 0, False))
     
     return row['key'] if row else None
 
-async def get_all_user_keys_24h(user_id:id, pool=POOL, day=1) -> list:
+async def get_all_user_keys_24h(user_id:id, pool=POOL, day=1.0) -> list:
     if user_id is None:
         return []
     if pool is None:
         pool = await get_pool()
         
     progression_query = f'SELECT key, time, type FROM "{HAMSTER}".keys WHERE user_id = $1 AND time > $2 ORDER BY time DESC'
-    regression_query = f'SELECT key, time, type FROM "{HAMSTER}".keys WHERE user_id = $1 AND time < $2 ORDER BY time DESC'
     
     num = await get_user_id(user_id, pool)
     if num is None:
@@ -404,21 +402,22 @@ def relative_time(time, reverse=False):
         return time - now()
     return now() - time
 
-def format_remaining_time(target_time: int, pref=" ago", reverse=False) -> str:
+def format_remaining_time(target_time: int, pref='en', reverse=False) -> str:
+    translate = json.load(open('localization.json'))[pref]['format_remaining_time']
     delta = relative_time(target_time, reverse)
-    prefix = "" if delta < 0 else pref
+    prefix = "" if delta < 0 else translate[0]
     delta = abs(delta)
 
     seconds = delta % 60
     minutes = (delta // 60) % 60
-    hours = (delta // 3600)
+    hours = int(delta // 3600)
     
     if hours > 0:
-        return f"{int(hours)} hours {int(minutes)} minutes{prefix}"
+        return ' '.join([str(hours), translate[1], str(minutes), translate[2], prefix])
     elif minutes > 0:
-        return f"{int(minutes)} minutes{prefix} {int(seconds)} seconds"
+        return ' '.join([str(minutes), translate[2], str(seconds), translate[3], prefix])
     else:
-        return f"{int(seconds)} seconds{prefix}"
+        return ' '.join([str(seconds), translate[3], prefix])
 
 def get_utc_time(target_hour: int, target_minute: int, target_second: int = 0, next = True) -> datetime:
     # Текущее время в UTC
