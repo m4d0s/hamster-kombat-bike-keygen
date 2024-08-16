@@ -797,14 +797,15 @@ async def generate_task_message(callback_query: types.CallbackQuery) -> None:
     except BadRequest:
         checker = None
     promo_ids = await get_checker_by_user_id(user_id=message.chat.id)
-    mark = '✅ ' if checker and checker.status != 'left' and current['control'] == 1 or int(task_id) in promo_ids and current['control'] == 0 else ''
-    foot = f"<i>{translate[cache['lang']]['generate_task_message'][0]}</i>" \
-           if checker and checker.status != 'left' and current['control'] == 1 or int(task_id) in promo_ids and current['control'] == 0 \
-            else f"<i>{translate[cache['lang']]['generate_task_message'][3]}</i>"
+    
+    done = checker and checker.status != 'left' and current['control'] == 1 or int(task_id) in promo_ids and current['control'] == 0
+    mark = '✅ ' if done == 0 else ''
+    foot = f"<i>{translate[cache['lang']]['generate_task_message'][3]}</i>" if done\
+            else f"<i>{translate[cache['lang']]['generate_task_message'][0]}</i>"
     
     text = mark + f"<b>{all[task_id]['name']}</b>\n\n" + all[task_id]['desc'] + "\n\n" + foot
             
-    but_text = translate[cache['lang']]['generate_task_message'][4] if checker and checker.status != 'left' and current['control'] == 1 or int(task_id) in promo_ids and current['control'] == 0 \
+    but_text = translate[cache['lang']]['generate_task_message'][4] if done \
                 else translate[cache['lang']]['generate_task_message'][1]
                    
     keyboard = InlineKeyboardMarkup()
@@ -834,7 +835,6 @@ async def check_task_message(callback_query: types.CallbackQuery) -> None:
     
     if str(task_id) in used:
         await bot.answer_callback_query(callback_query.id, show_alert=True, text=translate[cache['lang']]['check_task_message'][0])
-        return
     
     success = False
     
