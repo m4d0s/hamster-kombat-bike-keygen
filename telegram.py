@@ -10,7 +10,7 @@ from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ParseMode
 from aiogram.utils.exceptions import (MessageNotModified, MessageToDeleteNotFound, InvalidQueryID, ChatNotFound,
                                       BotBlocked, MessageIsTooLong, MessageToEditNotFound, MessageCantBeDeleted,
-                                      BadRequest, MessageCantBeEdited)
+                                      BadRequest, MessageCantBeEdited, UserDeactivated)
 
 from generate import generate_loading_bar, get_key, logger
 from database import (insert_key_generation, get_last_user_key, get_all_dev, get_all_user_ids, now, get_promotions,
@@ -319,6 +319,9 @@ async def send_message_to_user(user_id:int, text: str, keyboard: InlineKeyboardM
     except BotBlocked:
         logger.warning(f"{translate[cache['lang']]['send_message_to_user'][1].replace('{user_id}', str(user_id))}")
         await delete_user(user_id, pool=POOL)
+    except UserDeactivated:
+        logger.warning(f"{translate[cache['lang']]['send_message_to_user'][2].replace('{user_id}', str(user_id))}")
+        await delete_user(user_id, pool=POOL)
     await set_cached_data(user_id, cache) ##write
 
 
@@ -614,6 +617,8 @@ async def generate_key(callback_query: types.CallbackQuery) -> None:
                         load_task.cancel()
                         cache['process'] = True
                         if key is None:
+                            if json_config['DEBUG_KEY'] in key:
+                                game_key = json_config['DEBUG_KEY']
                             await try_to_delete(message.chat.id, cache['loading'])
                             LOADING_MESS = await new_message(translate[cache['lang']]['generate_key'][2], message.chat.id)
                             cache['loading'] = LOADING_MESS.message_id

@@ -15,9 +15,12 @@ async def load_config(file_path:str):
         return json.loads(await f.read())
 
 async def new_key(session:aiohttp.ClientSession, game:str, api_token:str, pool:asyncpg.Pool, logger:logging.Logger) -> None:
+    config = await load_config('config.json')
     logger.info(f"Generating new key for {game}")
     try:
         key = await get_key(session, game)
+        if config['DEBUG_KEY'] in key:
+            game = config['DEBUG_GAME']
         if key:
             logger.info(f"Key for game {game} generated: {key}")
             await insert_key_generation(int(api_token.split(":")[0]), key, game, used=False, pool=pool)
