@@ -382,7 +382,7 @@ async def process_callback_language(callback_query: types.CallbackQuery) -> None
 #mass report
 @dp.callback_query_handler(lambda c: c.data == 'report')
 async def process_callback_report(callback_query: types.CallbackQuery) -> None:
-    mass_report(callback_query.message)
+    await mass_report(callback_query.message)
 
 @dp.message_handler(commands=['report'])
 async def mass_report(message: types.Message) -> None:
