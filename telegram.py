@@ -671,7 +671,7 @@ async def get_key_limit(user: int, default=json_config['COUNT']):
         count = default + 4 + sum(refs // (2 ** i) % 2 ** i for i in range(1, refs.bit_length()))
     
     user_limit_keys = len(today_keys) or 0
-    completed = int(cache.get('tasks', 0))
+    completed = cache['tasks'] or 0
 
     # Handle task completion error
     if len(user_tasks) < completed:
