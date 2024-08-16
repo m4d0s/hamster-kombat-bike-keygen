@@ -71,14 +71,14 @@
             "EVENTS_DELAY": [20000, 25000]
         },
         "TWERK":{
-            "NAME": "Twerk",
+            "NAME": "Twerk Race",
             "APP_TOKEN": "61308365-9d16-4040-8bb0-2f4a4c69074c",
             "PROMO_ID": "61308365-9d16-4040-8bb0-2f4a4c69074c",
             "EVENTS_DELAY": [20000, 25000]
         }
     },
 
-    "DEBUG": true,
+    "DEBUG": false,
     "DEBUG_DELAY": [7500, 10000],
     "DEBUG_KEY": "C0D3-TH1S-1S-JU5T-T35T",
     "DEBUG_GAME": "C0D3"
