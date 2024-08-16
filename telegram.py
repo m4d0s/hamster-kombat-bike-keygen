@@ -791,7 +791,7 @@ async def generate_task_message(callback_query: types.CallbackQuery) -> None:
     task_id = str(callback_query.data.replace('generate_task_', ''))
     current = all[task_id]
     try:
-        checker = await bot.get_chat_member(chat_id=current['check_id'], user_id=callback_query.from_user.id)
+        checker = await bot.get_chat_member(chat_id=current['check_id'], user_id=callback_query.chat.id)
     except ChatNotFound:
         checker = None
     except BadRequest:
