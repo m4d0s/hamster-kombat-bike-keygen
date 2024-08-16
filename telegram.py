@@ -807,8 +807,14 @@ async def generate_task_message(callback_query: types.CallbackQuery) -> None:
         checker = await bot.get_chat_member(chat_id=current['check_id'], user_id=message.chat.id)
     except ChatNotFound:
         checker = None
+        current['control'] = 0
+        await delete_task_by_id(task_id, pool=POOL)
+        await send_error_message(message.chat.id, translate[cache['lang']]['generate_task_message'][6].replace('{num}', current['check_id']).replace('{task}', current['name']), only_dev=True)
     except BadRequest:
         checker = None
+        current['control'] = 0
+        await insert_task(current, check=0, pool=POOL)
+        await send_error_message(message.chat.id, translate[cache['lang']]['generate_task_message'][7].replace('{num}', current['check_id']).replace('{task}', current['name']), only_dev=True)
     promo_ids = await get_checker_by_user_id(user_id=message.chat.id)
     
     done = checker and checker.status != 'left' and current['control'] == 1 or int(task_id) in promo_ids and current['control'] == 0
