@@ -457,13 +457,16 @@ async def report(message: types.Message) -> None:
     cache['process'] = False
     await try_to_delete(chat_id=message.chat.id, message_id=message.message_id)
 
-    urls = re.findall(r'\[(.+?)\]\[(.+?)\]', message.text)
+    urls = re.findall(r'\[(.+?)\]\[(.+?)\]', message.text, re.DOTALL)
     text_without_buttons = re.sub(r'\[(.+?)\]\[(.+?)\]', '', message.html_text).strip()
 
-    transl = re.findall(r'```(\w+)\n(.*?)\n```|<code class="language-(\w+)">(.*?)<\/code>', text_without_buttons)
-    default = transl[0]
-    default = ('default', default[1], default[2], default[3])
-    transl.append(default)
+    transl = re.findall(r'<pre>```(\w+)\n(.*?)\n```<\/pre>|<pre><code class="language-(\w+)">(.*?)<\/code><\/pre>', text_without_buttons, re.DOTALL)
+    if transl is None:
+        transl = [('default',message.html_text,'','')]
+    else:
+        default = transl[0]
+        default = ('default', default[1], default[2], default[3])
+        transl.append(default)
     text_dict = {x[0] or x[2]: x[1] or x[3] for x in transl} if transl else {}
 
     keyboard = InlineKeyboardMarkup()
@@ -977,7 +980,7 @@ async def reply_to_task(message: types.Message) -> None:
         return
 
     bot_info = await bot.get_me()
-    transl_task = re.findall(r'```(\w+)\n(.*?)\n```|<code class="language-(\w+)">(.*?)<\/code>', message.html_text, re.DOTALL)
+    transl_task = re.findall(r'<pre>```(\w+)\n(.*?)\n```<\/pre>|<pre><code class="language-(\w+)">(.*?)<\/code><\/pre>', message.html_text, re.DOTALL)
 
     if not transl_task:
         await send_error_message(message.chat.id, translate[cache['lang']]['add_task'][3])
