@@ -59,7 +59,7 @@ async def set_cached_data(user:int, data:dict, pool=POOL):
     data_copy = data.copy()
     
     data_copy.pop('lang', None)
-    data_copy.pop('id', None)
+    data_copy.pop('user_id', None)
     data_copy.pop('right', None)
     
     await write_cached_data(user, data_copy, pool=pool) 
@@ -592,6 +592,9 @@ async def process_callback_generate_menu(callback_query: types.CallbackQuery) ->
     await try_to_delete(chat_id=message.chat.id, message_id=message.message_id)
     
     await set_cached_data(message.chat.id, cache) ##write
+
+
+
 
 
 #keys funcs
