@@ -108,9 +108,9 @@ def hide_key(key:str) -> str:
 
 
 #loadbars
-async def update_loadbar(chat_id:int, game_key:str) -> None:
+async def update_loadbar(chat_id:int, game_key:str, task:asyncio.Task) -> None:
     cache = await get_cached_data(chat_id) ##cache
-    
+        
     if DEBUG:
         sec = json_config['DEBUG_DELAY'][1] // 1000
     else:
@@ -121,32 +121,41 @@ async def update_loadbar(chat_id:int, game_key:str) -> None:
     cache['process'] = False
     await set_cached_data(chat_id, cache) ##write
     while not cache['process']:
-        text = generate_loading_bar(progress=loading, max=sec)
+        cache = await get_cached_data(chat_id)  ##cache
+        if cache['process']:
+            break
         
+        cache['process'] = task.done()
+        await set_cached_data(chat_id, cache)  ##write
+        text = generate_loading_bar(progress=loading, max=sec)
         time = translate[cache['lang']]['update_loadbar'][1].replace('{mins}', format_remaining_time(now() + sec, pref=cache['lang']))
         plus_text = snippet['italic'].format(text=translate[cache['lang']]['update_loadbar'][2].replace('{max}', format_remaining_time(now() + max_sec, pref=cache['lang']))) if loading >= sec else ''
         full = time + '\n' + plus_text + '\n\n' + text 
-        try:
-            await try_to_edit(full, chat_id, cache['loading'])
-        except MessageNotModified:
-            pass
+        stop_button = InlineKeyboardMarkup().add(InlineKeyboardButton(text=translate[cache['lang']]['update_loadbar'][3], callback_data="stop_process"))
+        await try_to_edit(full, chat_id, cache['loading'], keyboard=stop_button)
         delay = 1 + random.random()
         loading += delay
         await asyncio.sleep(delay)
-        cache = await get_cached_data(chat_id) ##cache
     cache['process'] = True
+    try:
+        key = task.result()
+    except Exception as e:
+        key = None
+        logger.warning('key is None' + str(e))
+    task.cancel()
     loading = sec
-    text = generate_loading_bar(progress=loading, max=sec)
-    full = time + '\n\n' + text
-    await try_to_edit(full, chat_id, cache['loading'])
+    # text = generate_loading_bar(progress=loading, max=sec)
+    # full = time + '\n\n' + text
+    # await try_to_edit(full, chat_id, cache['loading'])
     await set_cached_data(chat_id, cache) ##write
+    return key
 
 async def update_report(chat_id: int, 
                         text: str | dict, 
                         keyboard: InlineKeyboardMarkup = None, 
-                        users = None, 
-                        warning = False, 
-                        max_concurrent_tasks: int = 10) -> None:
+                        users:list = None, 
+                        warning:bool = False, 
+                        max_concurrent_tasks:int = 10) -> None:
     
     cache = await get_cached_data(chat_id)  # Получаем кэшированные данные
     loading = 0
@@ -192,17 +201,21 @@ async def update_report(chat_id: int,
         if loading == max:
             cache['process'] = True
             break
-        
+        stop_button = InlineKeyboardMarkup().add(InlineKeyboardButton(text=translate[cache['lang']]['update_report'][4], callback_data="stop_process"))
         time_text = translate[cache['lang']]['update_report'][0].replace('{mins}', str(max))
         full_report_text = time_text + f"\n{loading}/{max}" + '\n\n' + progress_text
         
         try:
-            await try_to_edit(full_report_text, chat_id, cache['report'])
+            await try_to_edit(full_report_text, chat_id, cache['report'], stop_button)
         except MessageNotModified:
             logger.error(f"Message for report in chat {chat_id} not modified")
         
         await asyncio.sleep(1)
-        
+    
+    undone = [x for x in tasks if not x.done()]
+    for task in undone:
+        task.cancel()   
+    
     if json_config['FIRST_SETUP']['MAIN_CHANNEL'] or json_config['FIRST_SETUP']['MAIN_GROUP'] and not warning:
         try:
             checker_group = await bot.get_chat(json_config['FIRST_SETUP']['MAIN_GROUP'])
@@ -239,19 +252,39 @@ async def update_report(chat_id: int,
                 link = f"https://t.me/{bot_info.username}"
                 strs.append(f"🤖 {snippet['link'].format(link=link, text=translate[cache['lang']]['update_report'][3])}")  
                 
-            text_to_send = '\n'.join([snippet['code-block'].format(text=code, lang=lang) for lang, code in text.items() if lang != 'default']) + "\n\n" \
-                + " | ".join(strs)
+            text_to_send = '\n'.join([snippet['quoteV2'].format(text=(snippet['bold'].format(text=translate[lang]['NAME']) \
+                            + "\n" + code if lang in translate else code))for lang, code in text.items() if lang != 'default']) \
+                            + "\n\n" + " | ".join(strs)
         
             if checker_channel is not None:
                 await new_message(text=text_to_send, chat_id=checker_channel.id)
             elif checker_group is not None:
                 await new_message(text=text_to_send, chat_id=checker_group.id)
          
+    await try_to_delete(chat_id, cache['report'])
+    stop_button = InlineKeyboardMarkup().add(InlineKeyboardButton(text=translate[cache['lang']]['update_report'][6], callback_data="main_menu"))
+    REPORT_MESS = await new_message(translate[cache['lang']]['update_report'][5], chat_id, stop_button)
+    cache['report'] = REPORT_MESS.message_id
     cache['process'] = True
     await set_cached_data(chat_id, cache)  # Снова записываем изменения в кэш
 
     # Дожидаемся завершения всех задач
     await asyncio.gather(*tasks)
+
+@dp.callback_query_handler(lambda c: c.data == 'stop_process')
+async def stop_process(callback_query: types.CallbackQuery) -> None:
+    chat_id = callback_query.message.chat.id
+    message_id = callback_query.message.message_id
+
+    # Получаем текущий кэш и устанавливаем флаг process в False
+    cache = await get_cached_data(chat_id)
+    cache['process'] = True  # Это прервет цикл while в update_report
+    await set_cached_data(chat_id, cache)
+    stop_button = InlineKeyboardMarkup().add(InlineKeyboardButton(text=translate[cache['lang']]['stop_process'][2], callback_data="main_menu"))
+
+    # Отправляем сообщение о завершении
+    await callback_query.answer(translate[cache['lang']]['stop_process'][0])
+    await try_to_edit(translate[cache['lang']]['stop_process'][1], chat_id, message_id, stop_button)
 
 
 
@@ -271,13 +304,15 @@ async def try_to_delete(chat_id:int, message_id:int) -> bool:
         logger.debug(f'Error deleting message in chat {chat_id}: {e}')
         return False
     
-async def try_to_edit(text:str, chat_id:int, message_id:int) -> bool:
+async def try_to_edit(text:str, chat_id:int, message_id:int, keyboard: InlineKeyboardMarkup = None) -> bool:
     if message_id is None or message_id == 0:
         logger.debug('Message ID is None to edit in chat ' + str(chat_id))
         return False
     try:
-        await bot.edit_message_text(text, chat_id, message_id, parse_mode=ParseMode.HTML)
+        await bot.edit_message_text(text, chat_id, message_id, parse_mode=ParseMode.HTML, reply_markup=keyboard)
         return True
+    except MessageNotModified:
+        return False
     except MessageToEditNotFound:
         return False
     except MessageCantBeEdited:
@@ -286,7 +321,7 @@ async def try_to_edit(text:str, chat_id:int, message_id:int) -> bool:
         logger.debug(f'Error editing message in chat {chat_id}: {e}')
         return False
     
-async def send_error_message(chat_id:int, message:str, e = None, only_dev = False) -> types.Message:
+async def send_error_message(chat_id:int, message:str, e:Exception = None, only_dev:bool = False) -> types.Message:
     cache = await get_cached_data(chat_id) ##cache
     keyboard = InlineKeyboardMarkup().add(InlineKeyboardButton(translate[cache['lang']]['send_error_message'][0], callback_data='main_menu'))
     if only_dev and cache['right'] < 0:
@@ -303,13 +338,24 @@ async def send_error_message(chat_id:int, message:str, e = None, only_dev = Fals
     await set_cached_data(chat_id, cache) ##write
     return ERROR_MESS
     
-async def new_message(text: str, chat_id: int, keyboard: InlineKeyboardMarkup = None, disable_preview = True, parse_mode = ParseMode.HTML) -> types.Message:
+async def new_message(text: str, chat_id: int, keyboard: InlineKeyboardMarkup = None, disable_preview:bool = True, document = None, parse_mode = ParseMode.HTML) -> types.Message:
     try:
+        if document:
+            return await bot.send_document(text=html_back_escape(text), 
+                                           chat_id=chat_id, 
+                                           parse_mode=parse_mode, 
+                                           disable_web_page_preview=disable_preview, 
+                                           reply_markup=keyboard, 
+                                           document=document)
         return await bot.send_message(text=html_back_escape(text), 
                                       chat_id=chat_id, 
                                       parse_mode=parse_mode, 
                                       disable_web_page_preview=disable_preview, 
                                       reply_markup=keyboard)
+    # except MessageIsTooLong:
+    #     logger.warning('Message is too long to send in chat ' + str(chat_id))
+    except UserDeactivated:
+        logger.warning("User ({user_id}) deactivated".format(user_id=chat_id))
     except BotBlocked:
         logger.warning("Bot was blocked by user ({user_id})".format(user_id=chat_id))
     except ChatNotFound:
@@ -325,14 +371,14 @@ async def send_message_to_user(user_id:int, text: str, keyboard: InlineKeyboardM
     cache = await get_cached_data(user_id) ##cache
     try:
         await new_message(chat_id=user_id, text=text, keyboard=keyboard)
+    except UserDeactivated:
+        logger.warning(f"{translate[cache['lang']]['send_message_to_user'][2].replace('{user_id}', str(user_id))}")
+        await delete_user(user_id, pool=POOL)
     except ChatNotFound:
         logger.warning(f"{translate[cache['lang']]['send_message_to_user'][0].replace('{user_id}', str(user_id))}")
         await delete_user(user_id, pool=POOL)
     except BotBlocked:
         logger.warning(f"{translate[cache['lang']]['send_message_to_user'][1].replace('{user_id}', str(user_id))}")
-        await delete_user(user_id, pool=POOL)
-    except UserDeactivated:
-        logger.warning(f"{translate[cache['lang']]['send_message_to_user'][2].replace('{user_id}', str(user_id))}")
         await delete_user(user_id, pool=POOL)
     await set_cached_data(user_id, cache) ##write
 
@@ -472,6 +518,9 @@ async def report(message: types.Message) -> None:
     keyboard = InlineKeyboardMarkup()
     for name, url in urls:
         keyboard.add(InlineKeyboardButton(text=name, url=url))
+    
+    stop_button = InlineKeyboardMarkup().add(InlineKeyboardButton(text=translate[cache['lang']]['update_report'][4], callback_data="stop_process"))
+    await try_to_edit(chat_id=message.chat.id, message_id=cache['report'], text=message.html_text, keyboard=stop_button)
 
     await set_cached_data(message.chat.id, cache)
     await update_report(message.chat.id, text_dict, keyboard)
@@ -549,17 +598,18 @@ async def send_welcome(message: types.Message) -> None:
     text3 += "\n\n" + snippet['italic'].format(text=translate[cache['lang']]['send_welcome'][5])
     
     text = text1 + text2 + text3
-    try:
+    
+    if len(text) < 4096:
         WELCOME_MESS = await new_message(text=text, chat_id=message.chat.id, keyboard=inline_kb, disable_preview=False)
         cache['welcome'] = WELCOME_MESS.message_id
-    except MessageIsTooLong:
+    else:
         keys = '\n'.join([f'{type}:\t{key}\t({format_remaining_time(key_time, pref=cache["lang"])})' for key, key_time, type in user_limit_keys])
         pseudo_file = create_pseudo_file(keys)
         text = text1 + f" {snippet['italic'].format(text=translate[cache['lang']]['send_welcome'][6])}" + text3
-        WELCOME_MESS = await bot.send_document(chat_id=message.chat.id, document=pseudo_file, caption=text, parse_mode=ParseMode.HTML, reply_markup=inline_kb)
+        WELCOME_MESS = await new_message(chat_id=message.chat.id, document=pseudo_file, text=text, keyboard=inline_kb)
         cache['welcome'] = WELCOME_MESS.message_id
+        
     await try_to_delete(chat_id=message.chat.id, message_id=message.message_id)
-    
     await set_cached_data(message.chat.id, cache) ##write
 
 @dp.callback_query_handler(lambda c: c.data == 'generate_menu')
@@ -623,7 +673,7 @@ async def generate_key(callback_query: types.CallbackQuery) -> None:
     if can_generate_key() and cache['process']:
         if user_limit_keys < global_limit_keys:
             mins = json_config['EVENTS'][game_key]['EVENTS_DELAY'][0] * 15 // 60000 // 2
-            LOADING_MESS = await new_message(text=translate[cache['lang']]['generate_key'][0].replace('{mins}', str(mins)), chat_id=message.chat.id)
+            LOADING_MESS = await new_message(text=translate[cache['lang']]['generate_key'][0].replace('{mins}', str(mins)), chat_id=message.chat.id, keyboard=stop_button)
             cache['loading'] = LOADING_MESS.message_id
             await set_cached_data(message.chat.id, cache) ##write
             try:
@@ -637,19 +687,12 @@ async def generate_key(callback_query: types.CallbackQuery) -> None:
                 else:
                     async with aiohttp.ClientSession() as session:
                         cache['process'] = False
-                        load_task = asyncio.create_task(update_loadbar(message.chat.id, game_key))
+                        await try_to_edit(text=message.html_text, chat_id=message.chat.id, message_id=message.message_id, keyboard=stop_button)
+                        load_task = asyncio.create_task(get_key(session, game_key))
+                        key= await update_loadbar(message.chat.id, game_key, load_task)
                         await set_cached_data(message.chat.id, cache) ##write
-                        key = await get_key(session, game_key)
-                        load_task.cancel()
                         cache['process'] = True
-                        if key is None:
-                            if json_config['DEBUG_KEY'] in key:
-                                game_key = json_config['DEBUG_KEY']
-                            await try_to_delete(message.chat.id, cache['loading'])
-                            LOADING_MESS = await new_message(text=translate[cache['lang']]['generate_key'][2], chat_id=message.chat.id)
-                            cache['loading'] = LOADING_MESS.message_id
-                            await set_cached_data(message.chat.id, cache) ##write
-                        else:
+                        if key is not None:
                             await try_to_delete(message.chat.id, cache['loading'])
                             await insert_key_generation(message.chat.id, key, game_key, pool=POOL)
                             LOADING_MESS = await new_message(text=translate[cache['lang']]['generate_key'][3].replace('{key}', snippet['code'].format(text=key)).replace('{delay}', str(delay)), chat_id=message.chat.id)
@@ -1129,9 +1172,10 @@ if __name__ == '__main__':
     users_id = asyncio.get_event_loop().run_until_complete(update_cache_process(POOL))
     logger.info("Send warning message to everyone who tried to generate key before....")
     
+    stop_button = InlineKeyboardMarkup().add(InlineKeyboardButton(text="Main menu", callback_data="main_menu"))
     text = {"ru": "Бот перезапущен, пожалуйста, сгенеруйте ключ заново (/start)", 
             "en": "Bot now restarted, please generate key again (/start)"}
-    asyncio.get_event_loop().run_until_complete(update_report(json_config['FIRST_SETUP']['DEV'], text, None, users_id, True))
+    asyncio.get_event_loop().run_until_complete(update_report(json_config['FIRST_SETUP']['DEV'], text, stop_button, users_id, True))
     
     logger.info('Telegram bot started...')
     executor.start_polling(dp, skip_updates=True)
