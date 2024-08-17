@@ -57,7 +57,7 @@ sem = asyncio.Semaphore(25)
 async def set_cached_data(user:int, data:dict, pool=POOL):
     reload_config()
     data_copy = data.copy()
-    
+    data_copy.pop('id', None)
     data_copy.pop('lang', None)
     data_copy.pop('user_id', None)
     data_copy.pop('right', None)
