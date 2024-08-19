@@ -46,7 +46,7 @@ async def reload_config(config_path='config.json', pool=POOL):
     
     defaults = {
         'DELAY': 30,
-        'GEN_PROXY': 80,
+        'GEN_PROXY': 0,
         'MAX_RETRY': 10,
         'COUNT': 16,
         'DEBUG_DELAY': 10000,
