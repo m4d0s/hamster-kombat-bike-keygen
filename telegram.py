@@ -13,7 +13,7 @@ from aiogram.utils.exceptions import (MessageNotModified, MessageToDeleteNotFoun
                                       BadRequest, MessageCantBeEdited, UserDeactivated)
 
 from generate import generate_loading_bar, get_key, logger
-from database import (insert_key_generation, get_last_user_key, get_all_user_ids, now, get_promotions,
+from database import (insert_key_generation, get_last_user_key, get_all_user_ids, now, get_promotions, update_proxy_work,
                       get_unused_key_of_type, relative_time, get_all_user_keys_24h, insert_user, format_remaining_time, 
                       delete_user, get_pool, get_all_refs, get_user, get_cached_data as get_cached, write_cached_data, 
                       update_cache_process, insert_task, get_checker_by_user_id, append_checker, delete_task_by_id,
@@ -54,41 +54,19 @@ async def reload_config(config_path='config.json', pool=POOL):
         'DEBUG_GAME': 'C0D3',
     }
     
-    dont_touch = ["EVENTS", "SCHEMAS", "DEBUG_DELAY", "DEBUG_KEY", "DEBUG", "DB", "DEBUG_GAME", "GEN_PROXY"]
-    need_to = ["DEV_ID", "API_TOKEN", "DELAY", "MAX_RETRY", "COUNT", "MAIN_GROUP", "MAIN_CHANNEL", "PROXY"]
+    dont_touch = ["EVENTS", "SCHEMAS", "DEBUG_DELAY", "DEBUG_KEY", "DEBUG", "DB", "DEBUG_GAME", "GEN_PROXY", "MAX_RETRY", "DELAY"]
+    need_to = ["DEV_ID", "API_TOKEN", "COUNT", "MAIN_GROUP", "MAIN_CHANNEL", "PROXY"]
     
     # Инициализация итогового конфига
-    final_config = {
-        'number': {},
-        'text': {}
-    }
+    final_config = db_config.copy()
     
     # 4. Проверка обязательных параметров и загрузка из локального или БД
     for category, keys in config_must.items():
         for key in keys:
-            if key.upper() in local_config:
+            if key.upper() in local_config and local_config[key.upper()] not in (0, ''):
                 final_config[category][key] = local_config[key]
-            elif key.upper() in db_config.get(category, {}):
-                final_config[category][key] = db_config[category][key]
-            else:
-                raise ValueError(f'Missing required config key: {key}')
-    
-    # 5. Объединение значений из БД, локального файла и дефолтных значений
-    for key in need_to:
-        if key in local_config and local_config[key] not in (0, ""):
-            if isinstance(local_config[key], int):
-                final_config['number'][key.upper()] = local_config[key]
-            elif isinstance(local_config[key], str):
-                final_config['text'][key.upper()] = local_config[key]
-        elif key in db_config['number']:
-            final_config['number'][key.upper()] = db_config['number'][key]
-        elif key in db_config['text']:
-            final_config['text'][key.upper()] = db_config['text'][key]
-        else:
-            if isinstance(defaults[key], int):
-                final_config['number'][key.upper()] = defaults[key]
-            elif isinstance(defaults[key], str):
-                final_config['text'][key.upper()] = defaults[key]
+            elif key.upper() in defaults and key.upper() not in final_config[category]:
+                final_config[category][key] = defaults[key]
     
     # 6. Обработка прокси
     if 'PROXY' in local_config:
@@ -214,19 +192,20 @@ async def update_loadbar(chat_id: int, game_key: str, session: aiohttp.ClientSes
     else:
         event_delay = json_config['EVENTS'][game_key]['EVENTS_DELAY']
         delay_rand = random.randint(event_delay[0], event_delay[1])
-        sec = delay_rand * (1 + json_config["MAX_RETRY"] * 2) // 1000 // 3 * count
-        max_sec = event_delay[1] * (1 + json_config["MAX_RETRY"] * 2) // 1000 * count
+        sec = delay_rand * (1 + db_config["MAX_RETRY"] * 2) // 1000 // 3 * count
+        max_sec = event_delay[1] * (1 + db_config["MAX_RETRY"] * 2) // 1000 * count
     
     # Начальная настройка текста и прогресс-баров
     time_text = translate[cache['lang']]['update_loadbar'][1].replace('{mins}', format_remaining_time(now() + sec, pref=cache['lang']))
-    plus_text = snippet['italic'].format(text=translate[cache['lang']]['update_loadbar'][2].replace('{max}', format_remaining_time(now() + max_sec, pref=cache['lang']))) if sec > 0 else ''
     starting_text = f"{time_text}"
     loadbars = [generate_loading_bar(progress=0, max=sec) for _ in range(count)]
     keys = []
     if json_config['DEBUG']:
         game_key = json_config['DEBUG_GAME']
 
+    loading = 0
     for i in range(count):
+        part_load = 0
         task = asyncio.create_task(get_key(session, game_key))
         free_key = await get_unused_key_of_type(game_key, pool=POOL)
         
@@ -235,8 +214,8 @@ async def update_loadbar(chat_id: int, game_key: str, session: aiohttp.ClientSes
             loadbars[i] = snippet['bold'].format(text=game_key + ": ") + snippet['code'].format(text=free_key)
             continue
         
-        loading, part_load = 0, 0
         while not task.done():
+            plus_text = snippet['italic'].format(text=translate[cache['lang']]['update_loadbar'][2].replace('{max}', format_remaining_time(now() + max_sec, pref=cache['lang']))) if loading > sec else ''
             cache = await get_cached_data(chat_id)
             if cache['process']:
                 break
@@ -256,8 +235,11 @@ async def update_loadbar(chat_id: int, game_key: str, session: aiohttp.ClientSes
         # Обработка завершения задачи
         try:
             key = task.result()
-            keys.append(key if key is not None else translate[cache['lang']]['update_loadbar'][4])
-            loadbars[i] = snippet['bold'].format(text=game_key + ": ") + snippet['code'].format(text=key)
+            keys.append(key)
+            if key is not None:
+                loadbars[i] = snippet['bold'].format(text=game_key + ": ") + snippet['code'].format(text=key)
+            else:
+                loadbars[i] = snippet['bold'].format(text=game_key + ": ") + snippet['code'].format(text=translate[cache['lang']]['update_loadbar'][4])
         except Exception as e:
             logger.warning(f"Не удалось получить ключ: {str(e)}")
             keys.append(None)
@@ -827,7 +809,7 @@ async def generate_key(callback_query: types.CallbackQuery) -> None:
                         await try_to_delete(message.chat.id, cache['loading'])
                         for k in key:
                             await insert_key_generation(message.chat.id, k, game_key, pool=POOL)
-                        key_text = '\n'.join([snippet['bold'].format(text=game_key) + ": " + snippet['code'].format(text=k) for k in key])
+                        key_text = '\n'.join([snippet['bold'].format(text=game_key) + ": " + snippet['code'].format(text=k) if k else '' for k in key])
                         stop_button = InlineKeyboardMarkup().add(InlineKeyboardButton(text=translate[cache['lang']]['generate_key'][7], callback_data="main_menu"))
                         LOADING_MESS = await new_message(text=translate[cache['lang']]['generate_key'][3].replace('{key}', key_text), chat_id=message.chat.id, keyboard=stop_button)
                         cache['loading'] = LOADING_MESS.message_id
@@ -879,7 +861,7 @@ async def get_key_limit(user: int, default:int=db_config['COUNT']):
         count = default + 4 + sum(refs // (2 ** i) % 2 ** i for i in range(1, refs.bit_length()))
     
     user_limit_keys = len(today_keys)
-    completed = cache.get('tasks', 0)
+    completed = cache.get('tasks', 0) or 0
 
     # Handle task completion error
     if len(user_tasks) < completed:
@@ -1293,6 +1275,7 @@ if __name__ == '__main__':
     POOL = asyncio.get_event_loop().run_until_complete(get_pool())
     BOT_INFO = asyncio.get_event_loop().run_until_complete(bot.get_me())
     users_id = asyncio.get_event_loop().run_until_complete(update_cache_process(POOL))
+    asyncio.get_event_loop().run_until_complete(update_proxy_work(POOL))
     logger.info("Send warning message to everyone who tried to generate key before....")
     
     stop_button = InlineKeyboardMarkup().add(InlineKeyboardButton(text="Main menu", callback_data="main_menu"))

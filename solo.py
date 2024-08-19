@@ -27,21 +27,29 @@ async def new_key(session:aiohttp.ClientSession, game:str, pool:asyncpg.Pool, lo
 
 async def main() -> None:
     config = json.loads(open('config.json').read())
-    events = [x for x in config['EVENTS']]
+    events = config['EVENTS']
+    keys = list(events.keys())
     semaphore = asyncio.Semaphore(config['GEN_PROXY'])
     logger = get_logger()
     pool = await get_pool()
-    # await insert_user(config['BOT_ID'], config['BOT_USERNAME'], pool=pool)
 
     async with aiohttp.ClientSession() as session:
         i = 0
         while True:
             tasks = []
-            while len(tasks) < config['GEN_PROXY']:
+            for _ in range(config['GEN_PROXY']):
                 async with semaphore:
-                    tasks.append(new_key(session, events[i % len(events)], pool=pool, logger=logger))
+                    task = asyncio.create_task(new_key(session, keys[i % len(events)], pool=pool, logger=logger, id=i))
+                    tasks.append(task)
                     i += 1
-            await asyncio.gather(*tasks)
+
+            # Use asyncio.gather and handle exceptions gracefully
+            try:
+                await asyncio.gather(*tasks)
+            except Exception as e:
+                logger.error(f"Error during task execution: {e}")
+
+
 
 if __name__ == '__main__':
     asyncio.run(main())

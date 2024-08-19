@@ -10,29 +10,29 @@ from database import log_timestamp, get_proxies, set_proxy
 
 # Load configuration
 config = json.loads(open('config.json').read())
-PROXY_LIST = asyncio.get_event_loop().run_until_complete(get_proxies())  # Load the list of proxies from config
+PROXY_LIST = asyncio.get_event_loop().run_until_complete(get_proxies())
+PROXY_LIST = [{'link': x['link'], 'work': x['work']} for x in PROXY_LIST]  # Load the list of proxies from config
 farmed_keys, attempts = 0, {}
-loading, MAX_LOAD = 0, 15
-
 users = [x for x in config['EVENTS']]
 
 def get_random_proxy():
     global PROXY_LIST
-    return random.choice(PROXY_LIST)
+    r_r = random.choice(PROXY_LIST)
+    return r_r
 
-def get_free_proxy():
+async def get_free_proxy():
     for proxy in PROXY_LIST:
-        if not PROXY_LIST[proxy]:  # Проверяем, что прокси не работает
-            set_work_proxy(proxy)
-            return {proxy: PROXY_LIST[proxy]}
+        if not proxy['work']:  # Проверяем, что прокси не работает
+            await set_work_proxy(proxy['link'], True)
+            return proxy
     return get_random_proxy()
 
-def set_work_proxy(proxy:str, work=True):
+async def set_work_proxy(proxy:str, work=True):
     for p in PROXY_LIST:
-        if p == proxy:  # Сравнение строки с полем 'proxy'
-            PROXY_LIST[p] = work
+        if p['link'] == proxy:  # Сравнение строки с полем 'proxy'
+            p['work'] = work
+            await set_proxy({p['link']: p['work']})
             return
-    set_proxy(PROXY_LIST)
     logger.warning(f"Прокси {proxy} не найден в списке.")
 
 def get_logger(file_level=logging.DEBUG, console_level=logging.INFO, base_level=logging.DEBUG):
@@ -75,8 +75,7 @@ def get_logger(file_level=logging.DEBUG, console_level=logging.INFO, base_level=
 
 logger = get_logger()
 
-def generate_loading_bar(progress=loading, length=MAX_LOAD, max=MAX_LOAD) -> str:
-    global loading, MAX_LOAD
+def generate_loading_bar(progress=0, length=15, max=100) -> str:
     text =  '[' + '▊' * int(progress / max * length if progress / max * length < length else length) +\
                  '▁' * (length - int(progress / max * length) if progress / max * length < length else 0) +\
             ']' + f' {progress / max * 100 if progress / max * 100 < 100 else 100:.2f}%'
@@ -97,12 +96,12 @@ async def fetch_api(session: aiohttp.ClientSession, path: str, body: dict, auth:
     if auth:
         headers['authorization'] = f'Bearer {auth}'
 
-    proxy = get_free_proxy()
+    proxy = await get_free_proxy()
 
     try:
-        async with session.post(url, headers=headers, json=body, proxy=proxy['proxy']) as res:
+        async with session.post(url, headers=headers, json=body, proxy=proxy['link']) as res:
             if config['DEBUG']:
-                logger.debug(f"Using proxy: {proxy['proxy']}")
+                logger.debug(f"Using proxy: {proxy['link']}")
                 logger.debug(f'URL: {url}')
                 logger.debug(f'Headers: {headers}')
                 logger.debug(f'Body: {body}')
@@ -110,7 +109,7 @@ async def fetch_api(session: aiohttp.ClientSession, path: str, body: dict, auth:
 
             if not res.ok:
                 await asyncio.sleep(10)
-                set_work_proxy(proxy.key, False)
+                set_work_proxy(proxy['link'], False)
                 raise Exception(f"{res.status} {res.reason}")
 
             # Парсинг только JSON (экономия трафика)
@@ -120,11 +119,10 @@ async def fetch_api(session: aiohttp.ClientSession, path: str, body: dict, auth:
 
     finally:
         # Независимо от успеха или ошибки, освобождаем прокси
-        set_work_proxy(proxy.key, False)
+        await set_work_proxy(proxy['link'], False)
 
 
 async def get_key(session, game_key):
-    global loading, MAX_LOAD
     
     if config['DEBUG']:
         await asyncio.sleep(randint(config['DEBUG_DELAY'] // 2, config['DEBUG_DELAY']) / 1000)
@@ -141,7 +139,6 @@ async def get_key(session, game_key):
         'clientOrigin': 'ios'
     }
     login_client_data = await fetch_api(session, '/promo/login-client', body)
-    loading = loading + 1 
     await delay(delay_ms)
 
     auth_token = login_client_data['clientToken']
@@ -156,7 +153,6 @@ async def get_key(session, game_key):
             'eventOrigin': 'undefined'
         }
         register_event_data = await fetch_api(session, '/promo/register-event', body, auth_token)
-        loading = loading + 1 
 
         if not register_event_data.get('hasCode'):
             await delay(delay_ms)
@@ -166,7 +162,6 @@ async def get_key(session, game_key):
             'promoId': game_config['PROMO_ID'],
         }
         create_code_data = await fetch_api(session, '/promo/create-code', body, auth_token)
-        loading = loading + 1 
 
         promo_code = create_code_data.get('promoCode')
         if promo_code:

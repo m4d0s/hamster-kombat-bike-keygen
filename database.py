@@ -361,6 +361,14 @@ async def get_cached_data(user_id:int, pool=POOL) -> dict:
     cached_data = {key: value for key, value in zip(rows[0].keys(), rows[0].values())} if rows else None
     return cached_data
 
+async def update_proxy_work(pool=POOL) -> None:
+    if pool is None:
+        pool = await get_pool()
+    
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            await conn.execute(f'UPDATE "{SCHEMAS["CONFIG"]}".proxy SET work = false')
+
 async def update_cache_process(pool=POOL) -> list:
     if pool is None:
         pool = await get_pool()
