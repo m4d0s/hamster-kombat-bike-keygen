@@ -6,34 +6,33 @@ import aiohttp
 import uuid
 import os
 from random import randint
-from database import log_timestamp
+from database import log_timestamp, get_proxies, set_proxy
 
 # Load configuration
 config = json.loads(open('config.json').read())
-ALL_EVENTS = config['EVENTS']
-DEBUG_MODE = config['DEBUG']
-PROXY_LIST = [{'proxy':proxy, 'work': False} for proxy in config['PROXY']]   # Load the list of proxies from config
+PROXY_LIST = asyncio.get_event_loop().run_until_complete(get_proxies())  # Load the list of proxies from config
 farmed_keys, attempts = 0, {}
 loading, MAX_LOAD = 0, 15
 
-users = [x for x in ALL_EVENTS]
+users = [x for x in config['EVENTS']]
 
 def get_random_proxy():
     global PROXY_LIST
-    return random.choice(PROXY_LIST)['proxy']
+    return random.choice(PROXY_LIST)
 
 def get_free_proxy():
     for proxy in PROXY_LIST:
-        if not proxy['work']:  # Проверяем, что прокси не работает
-            set_work_proxy(proxy['proxy'])
-            return proxy['proxy']
+        if not PROXY_LIST[proxy]:  # Проверяем, что прокси не работает
+            set_work_proxy(proxy)
+            return {proxy: PROXY_LIST[proxy]}
     return get_random_proxy()
 
 def set_work_proxy(proxy:str, work=True):
     for p in PROXY_LIST:
-        if p['proxy'] == proxy:  # Сравнение строки с полем 'proxy'
-            p['work'] = work
+        if p == proxy:  # Сравнение строки с полем 'proxy'
+            PROXY_LIST[p] = work
             return
+    set_proxy(PROXY_LIST)
     logger.warning(f"Прокси {proxy} не найден в списке.")
 
 def get_logger(file_level=logging.DEBUG, console_level=logging.INFO, base_level=logging.DEBUG):
@@ -101,9 +100,9 @@ async def fetch_api(session: aiohttp.ClientSession, path: str, body: dict, auth:
     proxy = get_free_proxy()
 
     try:
-        async with session.post(url, headers=headers, json=body, proxy=proxy) as res:
-            if DEBUG_MODE:
-                logger.debug(f"Using proxy: {proxy}")
+        async with session.post(url, headers=headers, json=body, proxy=proxy['proxy']) as res:
+            if config['DEBUG']:
+                logger.debug(f"Using proxy: {proxy['proxy']}")
                 logger.debug(f'URL: {url}')
                 logger.debug(f'Headers: {headers}')
                 logger.debug(f'Body: {body}')
@@ -111,7 +110,7 @@ async def fetch_api(session: aiohttp.ClientSession, path: str, body: dict, auth:
 
             if not res.ok:
                 await asyncio.sleep(10)
-                set_work_proxy(proxy, False)
+                set_work_proxy(proxy.key, False)
                 raise Exception(f"{res.status} {res.reason}")
 
             # Парсинг только JSON (экономия трафика)
@@ -121,14 +120,14 @@ async def fetch_api(session: aiohttp.ClientSession, path: str, body: dict, auth:
 
     finally:
         # Независимо от успеха или ошибки, освобождаем прокси
-        set_work_proxy(proxy, False)
+        set_work_proxy(proxy.key, False)
 
 
 async def get_key(session, game_key):
     global loading, MAX_LOAD
     
-    if DEBUG_MODE:
-        await asyncio.sleep(randint(config['DEBUG_DELAY'][0], config['DEBUG_DELAY'][1]) / 1000)
+    if config['DEBUG']:
+        await asyncio.sleep(randint(config['DEBUG_DELAY'] // 2, config['DEBUG_DELAY']) / 1000)
         game_key = 'C0D3'
         return config['DEBUG_KEY'] + "-" + "".join([random.choice("0123456789ABCDE") for _ in range(16)])
         

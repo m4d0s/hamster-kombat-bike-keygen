@@ -17,7 +17,7 @@ db_config = {
     'port': config['DB']['PORT']
 }
 
-HAMSTER = config['SCHEMAS']['HAMSTER']
+SCHEMAS = config['SCHEMAS']
 SSL_MODE = config['DB']['SSL']  # Assumes SSL configuration is handled correctly
 POOL = None
 
@@ -34,6 +34,80 @@ async def get_pool() -> asyncpg.Pool:
             ssl=SSL_MODE
         )
     return POOL
+
+#config
+async def get_config(pool=POOL):
+    if pool is None:
+        pool = await get_pool()  # Убедитесь, что get_pool() возвращает корректный пул соединений
+
+    config = {}
+
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            # Предполагаем, что таблицы содержат столбцы 'key' и 'value'
+            number_rows = await conn.fetch(f'SELECT key, value FROM "{SCHEMAS["CONFIG"]}".number')
+            text_rows = await conn.fetch(f'SELECT key, value FROM "{SCHEMAS["CONFIG"]}".text')
+
+            config = {
+                'number': {row['key'].upper(): row['value'] for row in number_rows},
+                'text': {row['key'].upper(): row['value'] for row in text_rows}
+            }
+
+    return config
+
+async def get_proxies(pool=POOL):
+    if pool is None:
+        pool = await get_pool()  # Получаем пул соединений, если он не был передан
+
+    proxies = {}
+
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            proxy_rows = await conn.fetch(f'SELECT id, proxy, work FROM "{SCHEMAS["CONFIG"]}".proxy')
+            proxies = {
+                row['proxy']: row['work']
+                for row in proxy_rows
+            }
+
+    return proxies
+
+async def set_config(config, pool=POOL):
+    if pool is None:
+        pool = await get_pool()  # Получаем пул соединений, если он не был передан
+
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            # Обработка секции 'number'
+            for key, value in config.get('number', {}).items():
+                await conn.execute(f'''
+                    INSERT INTO "{SCHEMAS["CONFIG"]}".number (key, value)
+                    VALUES ($1, $2)
+                    ON CONFLICT (key) DO UPDATE
+                    SET value = EXCLUDED.value
+                ''', key.lower(), value)
+
+            # Обработка секции 'text'
+            for key, value in config.get('text', {}).items():
+                await conn.execute(f'''
+                    INSERT INTO "{SCHEMAS["CONFIG"]}".text (key, value)
+                    VALUES ($1, $2)
+                    ON CONFLICT (key) DO UPDATE
+                    SET value = EXCLUDED.value
+                ''', key.lower(), value)
+           
+async def set_proxy(proxies:dict, pool=POOL):
+    if pool is None:
+        pool = await get_pool()  # Получаем пул соединений, если он не был передан
+
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            for proxy in proxies:
+                await conn.execute(f'''
+                    INSERT INTO "{SCHEMAS["CONFIG"]}".proxy (link, work)
+                    VALUES ($1, $2)
+                    ON CONFLICT (link) DO UPDATE
+                    SET work = EXCLUDED.work
+                ''', proxy, proxies[proxy])        
 
 
 
@@ -53,7 +127,7 @@ async def append_checker(user_id: int, promo_id: int, pool=POOL):
     async with pool.acquire() as conn:
         async with conn.transaction():
             await conn.execute(
-                f'INSERT INTO "{HAMSTER}".checker (user_id, promo_id) VALUES ($1, $2)',
+                f'INSERT INTO "{SCHEMAS["PROMOTION"]}".checker (user_id, promo_id) VALUES ($1, $2)',
                 num, promo_id
             )
 
@@ -71,41 +145,109 @@ async def get_checker_by_user_id(user_id:int, pool=POOL):
     async with pool.acquire() as conn:
         async with conn.transaction():
             nums = await conn.fetch(
-                f'SELECT * FROM "{HAMSTER}".checker WHERE user_id = $1 ORDER BY id DESC LIMIT 1',
+                f'SELECT * FROM "{SCHEMAS["PROMOTION"]}".checker WHERE user_id = $1 ORDER BY id DESC LIMIT 1',
                 num
             )
             return [row['promo_id'] for row in nums] if nums else []
 
-async def get_promotions(pool=POOL):
-    if pool is None:
+async def get_promotions(task_type: str = 'task', pool=None):
+    if not pool:
         pool = await get_pool()
     
     async with pool.acquire() as conn:
         async with conn.transaction():
-            rows = await conn.fetch(f'SELECT * FROM "{HAMSTER}".promo')
-    
-    # Преобразование каждой строки в словарь
-    result = {str(row['id']):dict(row) for row in rows}
+            # Получаем все промо по типу
+            promo_rows = await conn.fetch(
+                f'SELECT * FROM "{SCHEMAS["PROMOTION"]}".promo WHERE type = $1',
+                task_type
+            )
+            # Преобразуем строки в словарь
+            result = {str(row['id']): dict(row) for row in promo_rows}
+            
+            # Получаем все переводы, связанные с этими промо
+            promo_ids = tuple(result.keys())
+            if promo_ids:  # Проверяем, есть ли что-то для запроса
+                for promo_id in promo_ids:
+                    translate_rows = await conn.fetch(
+                        f'SELECT * FROM "{SCHEMAS["PROMOTION"]}".promo_translate WHERE promo_id = $1',
+                        int(promo_id)
+                    )
+                    
+                    for row in translate_rows:
+                        lang = row['lang']
+                        translation_type = row['type']
+                        value = row['value'] if translation_type not in ['check_id'] else int(row['value'])
+                        
+                        if lang not in result[promo_id]:
+                            result[promo_id][lang] = {}
+                        
+                        result[promo_id][lang][translation_type] = value
+
     return result
 
-async def insert_task(task: dict, check=1, pool=POOL) -> None:
-    if task is None:
-        return
-    if pool is None:
+async def insert_task(task: dict, check: int = 1, task_type: str = 'task', pool=None) -> int:
+    if not task:
+        return None
+    
+    if not pool:
         pool = await get_pool()
     
     async with pool.acquire() as conn:
         async with conn.transaction():
+            # Insert or update the main task record
             record = await conn.fetchrow(
-                f'INSERT INTO "{HAMSTER}".promo (name, "desc", link, check_id, control) ' +
-                'VALUES ($1, $2, $3, $4, $5) ' +
-                'ON CONFLICT (check_id) DO UPDATE SET name = EXCLUDED.name, "desc" = EXCLUDED."desc", link = EXCLUDED.link, control = EXCLUDED.control ' +
-                'RETURNING id, name, "desc", link, check_id, control',
-                task['name'], task['desc'], task['link'], task['check_id'], check
+                f'''
+                INSERT INTO "{SCHEMAS["PROMOTION"]}".promo (name, "desc", link, check_id, control, type) 
+                VALUES ($1, $2, $3, $4, $5, $6)
+                ON CONFLICT (check_id) 
+                DO UPDATE SET 
+                    name = EXCLUDED.name, 
+                    "desc" = EXCLUDED."desc", 
+                    link = EXCLUDED.link, 
+                    control = EXCLUDED.control 
+                RETURNING id
+                ''',
+                task['name'], task['desc'], task['link'], task['check_id'], check, task_type
             )
-            if record:
-                return record['id']
-            return None
+            
+            task_id = record['id']
+            
+            # Insert or update translations
+            for lang, translations in task.items():
+                if lang in ['name', 'desc', 'link', 'check_id', 'id']:  # Skip non-translation keys
+                    continue
+                
+                for obj, value in translations.items():
+                    if obj in ['check_id']:
+                        value = str(value)
+                    some_id = await conn.fetchrow(
+                        f'''
+                        SELECT id FROM "{SCHEMAS["PROMOTION"]}".promo_translate
+                        WHERE promo_id = $1 AND lang = $2 AND type = $3
+                        ''',
+                        task_id, lang, obj
+                    )
+                    
+                    if some_id is None:
+                        await conn.execute(
+                            f'''
+                            INSERT INTO "{SCHEMAS["PROMOTION"]}".promo_translate (promo_id, lang, type, value)
+                            VALUES ($1, $2, $3, $4)
+                            ''',
+                            task_id, lang, obj, value
+                        )
+                    else:
+                        await conn.execute(
+                            f'''
+                            UPDATE "{SCHEMAS["PROMOTION"]}".promo_translate
+                            SET value = $1
+                            WHERE id = $2
+                            ''',
+                            value, some_id['id']
+                        )
+    
+    return task_id
+
 
 async def delete_task_by_id(id:int, pool=POOL) -> None:
     if id is None:
@@ -117,7 +259,7 @@ async def delete_task_by_id(id:int, pool=POOL) -> None:
     async with pool.acquire() as conn:
         async with conn.transaction():
             await conn.execute(
-                f'DELETE FROM "{HAMSTER}".promo WHERE id = $1',
+                f'DELETE FROM "{SCHEMAS["PROMOTION"]}".promo WHERE id = $1',
                 id
             )
 
@@ -138,7 +280,7 @@ async def insert_key_generation(user_id:int, key:str, key_type:str, used=True, p
     async with pool.acquire() as conn:
         async with conn.transaction():
             await conn.execute(
-                f'INSERT INTO "{HAMSTER}".keys (user_id, key, time, type, used) ' +
+                f'INSERT INTO "{SCHEMAS["HAMSTER"]}".keys (user_id, key, time, type, used) ' +
                 'VALUES ($1, $2, $3, $4, $5) ' +
                 'ON CONFLICT (key) DO UPDATE SET used = EXCLUDED.used, user_id = EXCLUDED.user_id, time = EXCLUDED.time',
                 num, key, now(), key_type, used
@@ -157,7 +299,7 @@ async def get_last_user_key(user_id:int , pool=POOL) -> dict:
     async with pool.acquire() as conn:
         async with conn.transaction():
             row = await conn.fetchrow(
-                f'SELECT * FROM "{HAMSTER}".keys WHERE user_id = $1 ORDER BY time DESC LIMIT 1',
+                f'SELECT * FROM "{SCHEMAS["HAMSTER"]}".keys WHERE user_id = $1 ORDER BY time DESC LIMIT 1',
                 num
             )
     
@@ -169,7 +311,7 @@ async def get_unused_key_of_type(key_type:str, pool=POOL, day = 1.0) -> str:
     if pool is None:
         pool = await get_pool()
     
-    progression_query = f'SELECT key FROM "{HAMSTER}".keys WHERE type = $1 AND used = false AND time > $2 ORDER BY time ASC LIMIT 1'
+    progression_query = f'SELECT key FROM "{SCHEMAS["HAMSTER"]}".keys WHERE type = $1 AND used = false AND time > $2 ORDER BY time ASC LIMIT 1'
     
     async with pool.acquire() as conn:
         async with conn.transaction():
@@ -184,7 +326,7 @@ async def get_all_user_keys_24h(user_id:id, pool=POOL, day=1.0) -> list:
     if pool is None:
         pool = await get_pool()
         
-    progression_query = f'SELECT key, time, type FROM "{HAMSTER}".keys WHERE user_id = $1 AND time > $2 ORDER BY time DESC'
+    progression_query = f'SELECT key, time, type FROM "{SCHEMAS["HAMSTER"]}".keys WHERE user_id = $1 AND time > $2 ORDER BY time DESC'
     
     num = await get_user_id(user_id, pool)
     if num is None:
@@ -207,7 +349,7 @@ async def get_cached_data(user_id:int, pool=POOL) -> dict:
     if pool is None:
         pool = await get_pool()
         
-    query = f'SELECT * FROM "{HAMSTER}".cache WHERE user_id = $1'
+    query = f'SELECT * FROM "{SCHEMAS["HAMSTER"]}".cache WHERE user_id = $1'
     num = await get_user_id(user_id, pool)
     if num is None:
         return
@@ -225,7 +367,7 @@ async def update_cache_process(pool=POOL) -> list:
     
     # Запрос для обновления и получения tg_id
     update_query = f'''
-    UPDATE "{HAMSTER}".cache
+    UPDATE "{SCHEMAS["HAMSTER"]}".cache
     SET process = true
     WHERE process = false
     RETURNING user_id
@@ -234,7 +376,7 @@ async def update_cache_process(pool=POOL) -> list:
     # Запрос для получения tg_id по user_id
     user_query = f'''
     SELECT tg_id
-    FROM "{HAMSTER}".users
+    FROM "{SCHEMAS["HAMSTER"]}".users
     WHERE id = $1
     '''
     
@@ -267,7 +409,7 @@ async def write_cached_data(user_id:int, cached_data: dict, pool=POOL) -> None:
         async with conn.transaction():
             # Формируем запрос на обновление
             update_query = f'''
-                UPDATE "{HAMSTER}".cache
+                UPDATE "{SCHEMAS["HAMSTER"]}".cache
                 SET {', '.join([f'{key} = ${i+2}' for i, key in enumerate(cached_data.keys())])}
                 WHERE user_id = $1
             '''
@@ -279,7 +421,7 @@ async def write_cached_data(user_id:int, cached_data: dict, pool=POOL) -> None:
             if update_result == "UPDATE 0":
                 # Если нет, вставляем новую запись
                 insert_query = f'''
-                    INSERT INTO "{HAMSTER}".cache (user_id, {', '.join(cached_data.keys())})
+                    INSERT INTO "{SCHEMAS["HAMSTER"]}".cache (user_id, {', '.join(cached_data.keys())})
                     VALUES ($1, {', '.join([f'${i+2}' for i in range(len(cached_data))])})
                     ON CONFLICT (user_id) DO UPDATE SET {', '.join([f'{key} = EXCLUDED.{key}' for key in cached_data.keys()])}
                 '''
@@ -296,7 +438,7 @@ async def get_all_refs(user_id:int, pool=POOL) -> list:
     if pool is None:
         pool = await get_pool()
         
-    query = f'SELECT ref_id FROM "{HAMSTER}".users WHERE ref_id = $1'
+    query = f'SELECT ref_id FROM "{SCHEMAS["HAMSTER"]}".users WHERE ref_id = $1'
     
     async with pool.acquire() as conn:
         # Directly fetch the results without explicit transaction (SELECT query doesn't need it)
@@ -314,16 +456,16 @@ async def insert_user(user_id:int, username:str, ref=0, lang='en', pool=POOL) ->
         
     async with pool.acquire() as conn:
         async with conn.transaction():
-            await conn.execute(f'INSERT INTO "{HAMSTER}".users (tg_id, tg_username, ref_id, lang) '+
+            await conn.execute(f'INSERT INTO "{SCHEMAS["HAMSTER"]}".users (tg_id, tg_username, ref_id, lang) '+
                                'VALUES ($1, $2, $3, $4) '+
                                'ON CONFLICT (tg_id) DO UPDATE '+
                                'SET tg_username = EXCLUDED.tg_username', 
                                user_id, username, ref, lang)
-            num = await conn.fetchrow(f'SELECT id FROM "{HAMSTER}".users WHERE tg_id = $1 ORDER BY id DESC LIMIT 1', user_id)
+            num = await conn.fetchrow(f'SELECT id FROM "{SCHEMAS["HAMSTER"]}".users WHERE tg_id = $1 ORDER BY id DESC LIMIT 1', user_id)
             if num is None:
                 return None
             num = num['id']
-            await conn.execute(f'INSERT INTO "{HAMSTER}".cache (user_id) VALUES ($1) ON CONFLICT DO NOTHING', num)
+            await conn.execute(f'INSERT INTO "{SCHEMAS["HAMSTER"]}".cache (user_id) VALUES ($1) ON CONFLICT DO NOTHING', num)
 
 async def get_user(user_id:int, pool=POOL) -> dict:
     if user_id is None:
@@ -333,7 +475,7 @@ async def get_user(user_id:int, pool=POOL) -> dict:
         
     async with pool.acquire() as conn:
         async with conn.transaction():
-            row = await conn.fetchrow(f'SELECT * FROM "{HAMSTER}".users WHERE tg_id = $1', user_id)
+            row = await conn.fetchrow(f'SELECT * FROM "{SCHEMAS["HAMSTER"]}".users WHERE tg_id = $1', user_id)
     
     return {'username': row['tg_username'], 
             'tg_id': row['tg_id'], 
@@ -351,7 +493,7 @@ async def delete_user(user_id: int, pool=POOL) -> None:
         
     async with pool.acquire() as conn:
         async with conn.transaction():
-            await conn.execute(f'DELETE FROM "{HAMSTER}".users WHERE tg_id = $1', user_id)
+            await conn.execute(f'DELETE FROM "{SCHEMAS["HAMSTER"]}".users WHERE tg_id = $1', user_id)
 
 async def get_all_user_ids(pool=POOL) -> list:
     if pool is None:
@@ -359,17 +501,7 @@ async def get_all_user_ids(pool=POOL) -> list:
         
     async with pool.acquire() as conn:
         async with conn.transaction():
-            rows = await conn.fetch(f'SELECT tg_id FROM "{HAMSTER}".users')
-    
-    return [row['tg_id'] for row in rows] if rows else None
-
-async def get_all_dev(pool=POOL, level= 1) -> list:
-    if pool is None:
-        pool = await get_pool()
-        
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            rows = await conn.fetch(f'SELECT tg_id FROM "{HAMSTER}".users WHERE "right" > $1', level - 1)
+            rows = await conn.fetch(f'SELECT tg_id FROM "{SCHEMAS["HAMSTER"]}".users')
     
     return [row['tg_id'] for row in rows] if rows else None
 
@@ -382,7 +514,7 @@ async def get_user_id(tg_id:int, pool=POOL):
     async with pool.acquire() as conn:
         async with conn.transaction():
             num = await conn.fetchrow(
-                f'SELECT * FROM "{HAMSTER}".users WHERE tg_id = $1 ORDER BY id DESC LIMIT 1',
+                f'SELECT * FROM "{SCHEMAS["HAMSTER"]}".users WHERE tg_id = $1 ORDER BY id DESC LIMIT 1',
                 tg_id
             )
             if num is None:
