@@ -81,23 +81,24 @@ async def fetch_api(session: aiohttp.ClientSession, path: str, body: dict, auth:
     proxy = await get_free_proxy()
 
     try:
-        async with session.post(url, headers=headers, json=body, proxy=proxy['link']) as res:
-            if config['DEBUG']:
-                logger.debug(f"Using proxy: {proxy['link']}")
-                logger.debug(f'URL: {url}')
-                logger.debug(f'Headers: {headers}')
-                logger.debug(f'Body: {body}')
-                logger.debug(f'Response Status: {res.status}')
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, headers=headers, json=body, proxy=proxy['link']) as res:
+                if config['DEBUG']:
+                    logger.debug(f"Using proxy: {proxy['link']}")
+                    logger.debug(f'URL: {url}')
+                    logger.debug(f'Headers: {headers}')
+                    logger.debug(f'Body: {body}')
+                    logger.debug(f'Response Status: {res.status}')
 
-            if not res.ok:
-                await delay(config['DELAY'] * 1000, "API error")
-                await set_proxy({proxy['link']: False})
-                raise Exception(f"{res.status} {res.reason}")
+                if not res.ok:
+                    await delay(config['DELAY'] * 1000, "API error")
+                    await set_proxy({proxy['link']: False})
+                    raise Exception(f"{res.status} {res.reason}")
 
-            # Парсинг только JSON (экономия трафика)
-            response_data = await res.json()
+                # Парсинг только JSON (экономия трафика)
+                response_data = await res.json()
 
-            return response_data
+                return response_data
 
     finally:
         # Независимо от успеха или ошибки, освобождаем прокси
