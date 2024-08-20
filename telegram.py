@@ -12,7 +12,7 @@ from aiogram.utils.exceptions import (MessageNotModified, MessageToDeleteNotFoun
                                       BotBlocked, MessageIsTooLong, MessageToEditNotFound, MessageCantBeDeleted,
                                       BadRequest, MessageCantBeEdited, UserDeactivated)
 
-from generate import generate_loading_bar, get_key, logger
+from generate import generate_loading_bar, get_key, logger, delay
 from database import (insert_key_generation, get_last_user_key, get_all_user_ids, now, get_promotions, update_proxy_work,
                       get_unused_key_of_type, relative_time, get_all_user_keys_24h, insert_user, format_remaining_time, 
                       delete_user, get_pool, get_all_refs, get_user, get_cached_data as get_cached, write_cached_data, 
@@ -54,7 +54,8 @@ async def reload_config(config_path='config.json', pool=POOL):
         'DEBUG_GAME': 'C0D3',
     }
     
-    dont_touch = ["EVENTS", "SCHEMAS", "DEBUG_DELAY", "DEBUG_KEY", "DEBUG", "DB", "DEBUG_GAME", "GEN_PROXY", "MAX_RETRY", "DELAY"]
+    dont_touch = ["EVENTS", "SCHEMAS", "DEBUG_DELAY", "DEBUG_KEY", "DEBUG", "DB", "DEBUG_GAME",
+                  "GEN_PROXY", "MAX_RETRY", "DELAY", "DEBUG_LOG"]
     need_to = ["DEV_ID", "API_TOKEN", "COUNT", "MAIN_GROUP", "MAIN_CHANNEL", "PROXY"]
     
     # Инициализация итогового конфига
@@ -167,8 +168,8 @@ def hide_key(key:str) -> str:
             hiden_key += key[i]
     return hiden_key
 
-def request_level(level:int, require) -> bool:
-    return level >= require
+def request_level(level:int, require, user_id) -> bool:
+    return level >= require or user_id == db_config['DEV_ID']
 
 def username_valid(username:str) -> bool:
     symbols = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_'
@@ -179,7 +180,7 @@ def username_valid(username:str) -> bool:
 
 
 #loadbars
-async def update_loadbar(chat_id: int, game_key: str, session: aiohttp.ClientSession, count=1) -> None:
+async def update_loadbar(chat_id: int, game_key: str, session: aiohttp.ClientSession, count=1, update_delay=2) -> None:
     # Получаем кэш один раз в начале
     cache = await get_cached_data(chat_id)
     cache['process'] = False
@@ -206,7 +207,6 @@ async def update_loadbar(chat_id: int, game_key: str, session: aiohttp.ClientSes
     loading = 0
     for i in range(count):
         part_load = 0
-        task = asyncio.create_task(get_key(session, game_key))
         free_key = await get_unused_key_of_type(game_key, pool=POOL)
         
         if free_key is not None:
@@ -214,23 +214,27 @@ async def update_loadbar(chat_id: int, game_key: str, session: aiohttp.ClientSes
             loadbars[i] = snippet['bold'].format(text=game_key + ": ") + snippet['code'].format(text=free_key)
             continue
         
+        task = asyncio.create_task(get_key(session, game_key))
+        
         while not task.done():
             plus_text = snippet['italic'].format(text=translate[cache['lang']]['update_loadbar'][2].replace('{max}', format_remaining_time(now() + max_sec, pref=cache['lang']))) if loading > sec else ''
             cache = await get_cached_data(chat_id)
+            mark = "[!] " if loading > sec else ""
             if cache['process']:
-                break
+               task.cancel()
+               return [key for key in keys if key is not None]
 
-            loadbars[i] = generate_loading_bar(progress=part_load, max=sec // count)
+            loadbars[i] = mark + generate_loading_bar(progress=part_load, max=sec // count)
             some_text = '\n'.join(loadbars)
             full_text = f"{starting_text}\n\n{some_text}\n{plus_text}"
             stop_button = InlineKeyboardMarkup().add(InlineKeyboardButton(text=translate[cache['lang']]['update_loadbar'][3], callback_data="stop_process"))
 
             await try_to_edit(full_text, chat_id, cache['loading'], keyboard=stop_button)
             
-            delay = 1 + random.random()
-            loading += delay
-            part_load += delay
-            await asyncio.sleep(delay)
+            delay_s = update_delay + random.random()
+            loading += delay_s
+            part_load += delay_s
+            await delay(delay_s * 1000, f"Update loadbar for {chat_id}")
         
         # Обработка завершения задачи
         try:
@@ -245,16 +249,12 @@ async def update_loadbar(chat_id: int, game_key: str, session: aiohttp.ClientSes
             keys.append(None)
             loadbars[i] = snippet['bold'].format(text=game_key + ": ") + snippet['code'].format(text=translate[cache['lang']]['update_loadbar'][4])
 
-        task.cancel()
-
-        if cache['process']:
-            break
 
     # Обновляем кэш в конце выполнения
     cache['process'] = True
     await set_cached_data(chat_id, cache)
 
-    return keys
+    return [key for key in keys if key is not None]
 
 async def update_report(chat_id: int, 
                         text: str | dict, 
@@ -316,7 +316,7 @@ async def update_report(chat_id: int,
         except MessageNotModified:
             logger.error(f"Message for report in chat {chat_id} not modified")
         
-        await asyncio.sleep(1)
+        await delay(1000, f"Update report load for {chat_id}")
     
     undone = [x for x in tasks if not x.done()]
     for task in undone:
@@ -539,7 +539,7 @@ async def send_language_choose(message: types.Message) -> None:
     else:
         await send_welcome(message)
         await insert_user(message.chat.id, message.from_user.username, ref=user['ref'], lang=cache['lang'],  pool=POOL)
-    await asyncio.sleep(1) ##delay1
+    await delay(1000, "Language choose")
     await try_to_delete(chat_id=message.chat.id, message_id=message.message_id)
     await set_cached_data(message.chat.id, cache) ##write
 
@@ -563,7 +563,7 @@ async def process_callback_report(callback_query: types.CallbackQuery) -> None:
 @dp.message_handler(commands=['report'])
 async def mass_report(message: types.Message) -> None:
     cache = await get_cached_data(message.chat.id) ##cache
-    if not request_level(cache['right'], 1) or not cache['process']:
+    if not request_level(cache['right'], 1, message.chat.id) or not cache['process']:
         return
     await send_report_example(message)
 
@@ -604,7 +604,7 @@ async def report(message: types.Message) -> None:
         await reply_to_task(message)
         return
 
-    if not request_level(cache['right'], 2): # 2 - report
+    if not request_level(cache['right'], 2, message.chat.id): # 2 - report
         return
 
     cache['process'] = False
@@ -647,7 +647,7 @@ async def send_welcome(message: types.Message) -> None:
     inline_kb.add(other_games)
     inline_kb.add(inline_tasks)
     inline_kb.add(giveaways)
-    if request_level(cache['right'], 1): # 1 - report
+    if request_level(cache['right'], 1, message.chat.id): # 1 - report
         inline_kb.add(inline_report)
     today_keys = await get_all_user_keys_24h(user_id=message.chat.id, pool=POOL)
     user_limit_keys, global_limit_keys = await get_key_limit(user=message.chat.id)
@@ -733,9 +733,10 @@ async def process_callback_generate_menu(callback_query: types.CallbackQuery) ->
     text += snippet['italic'].format(text=translate[cache['lang']]['process_callback_generate_menu'][2])
 
     keyboard = InlineKeyboardMarkup()
-    
+    def mark(game):
+        return '✅ ' if not json_config['EVENTS'][game]['DISABLED'] else '❌ '
     # Создаем список кнопок из конфигурации
-    buttons = [InlineKeyboardButton(text=json_config['EVENTS'][type]['NAME'], callback_data=f'generate_key_{type}') for type in json_config['EVENTS']]
+    buttons = [InlineKeyboardButton(text=mark(type) + json_config['EVENTS'][type]['NAME'], callback_data=f'generate_key_{type}') for type in json_config['EVENTS']]
     
     # Добавляем кнопки по две в строке
     for i in range(0, len(buttons), 2):
@@ -809,7 +810,8 @@ async def generate_key(callback_query: types.CallbackQuery) -> None:
                         await try_to_delete(message.chat.id, cache['loading'])
                         for k in key:
                             await insert_key_generation(message.chat.id, k, game_key, pool=POOL)
-                        key_text = '\n'.join([snippet['bold'].format(text=game_key) + ": " + snippet['code'].format(text=k) if k else '' for k in key])
+                        key_text = '\n'.join([snippet['bold'].format(text=game_key) + ": " + snippet['code'].format(text=k) if k else '' for k in key]) \
+                                    if len(key) > 0 else translate[cache['lang']]['generate_key'][2]
                         stop_button = InlineKeyboardMarkup().add(InlineKeyboardButton(text=translate[cache['lang']]['generate_key'][7], callback_data="main_menu"))
                         LOADING_MESS = await new_message(text=translate[cache['lang']]['generate_key'][3].replace('{key}', key_text), chat_id=message.chat.id, keyboard=stop_button)
                         cache['loading'] = LOADING_MESS.message_id
@@ -842,9 +844,6 @@ async def generate_key(callback_query: types.CallbackQuery) -> None:
         await set_cached_data(message.chat.id, cache) ##write
             
     await set_cached_data(message.chat.id, cache) ##write
-    # await try_to_delete(chat_id=message.chat.id, message_id=cache['error'])
-    # await asyncio.sleep(delay)
-    # await send_welcome(callback_query.message)
 
 async def get_key_limit(user: int, default:int=db_config['COUNT']):
     cache = await get_cached_data(user)
@@ -951,7 +950,7 @@ async def process_callback_generate_tasks(callback_query: types.CallbackQuery) -
         inline_btn = InlineKeyboardButton(text=mark + all[task]['name'], callback_data=f'generate_task_{task}')
         keyboard.add(inline_btn)
         
-    if request_level(cache['right'], 2): # 2 - add_task
+    if request_level(cache['right'], 2, message.chat.id): # 2 - add_task
         keyboard.add(InlineKeyboardButton(text=translate[cache['lang']]['process_callback_generate_tasks'][5], callback_data='delete_task'),
                      InlineKeyboardButton(text=translate[cache['lang']]['process_callback_generate_tasks'][4], callback_data='add_task'))
     else:
@@ -1082,7 +1081,7 @@ async def check_task_message(callback_query: types.CallbackQuery) -> None:
 @dp.callback_query_handler(lambda c: c.data == 'add_task')
 async def add_task_message(callback_query: types.CallbackQuery) -> None:
     cache = await get_cached_data(callback_query.from_user.id) ##cache
-    if not request_level(cache['right'], 2): # 2 - add_task
+    if not request_level(cache['right'], 2, callback_query.from_user.id): # 2 - add_task
         text = snippet['bold'].format(text=translate[cache['lang']]['add_task_message'][0])
         channel = await bot.get_chat(chat_id=db_config["MAIN_CHANNEL"])
         key = InlineKeyboardMarkup().add(InlineKeyboardButton(translate[cache['lang']]['add_task_message'][1], url=await channel.get_url()))
@@ -1098,7 +1097,7 @@ async def add_task_message(callback_query: types.CallbackQuery) -> None:
 @dp.message_handler(commands=['add_task'])
 async def send_task_example(message: types.Message) -> None:
     cache = await get_cached_data(message.chat.id) ##cache
-    if request_level(cache['right'], 2): # 2 - report
+    if request_level(cache['right'], 2, message.chat.id): # 2 - report
         if not cache['process']:
             text = translate[cache['lang']]['send_task_example'][8] 
             if cache['error']:
@@ -1125,7 +1124,7 @@ async def reply_to_task(message: types.Message) -> None:
     cache = await get_cached_data(message.chat.id)
     
     if message.reply_to_message.message_id != cache['addtask'] or not cache['process'] \
-        or not request_level(cache['right'], 2): # 2 - add_task
+        or not request_level(cache['right'], 2, message.chat.id): # 2 - add_task
         return
     control = 1
     transl_task = re.findall(r'<pre>```(\w+)\n(.*?)\n```<\/pre>|<pre><code class="language-(\w+)">(.*?)<\/code><\/pre>', message.html_text, re.DOTALL)
@@ -1204,7 +1203,7 @@ async def delete_task_message(message: types.Message) -> None:
     if not cache['process']:
         return
     
-    if not request_level(cache['right'], 3): # 3 - delete_task
+    if not request_level(cache['right'], 3, message.chat.id): # 3 - delete_task
         return
     
     text = translate[cache['lang']]['delete_task'][0]
@@ -1225,7 +1224,7 @@ async def process_callback_delete_task(callback_query: types.CallbackQuery) -> N
     if not cache['process']:
         return
     
-    if not request_level(cache['right'], 3): # 3 - delete_task
+    if not request_level(cache['right'], 3, callback_query.message.chat.id): # 3 - delete_task
         return
     
     task_id = callback_query.data.split('_')[2]

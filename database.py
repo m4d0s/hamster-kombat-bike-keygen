@@ -103,11 +103,33 @@ async def set_proxy(proxies:dict, pool=POOL):
         async with conn.transaction():
             for proxy in proxies:
                 await conn.execute(f'''
-                    INSERT INTO "{SCHEMAS["CONFIG"]}".proxy (link, work)
+                    INSERT INTO "{SCHEMAS["CONFIG"]}".proxy (link, work, time)
                     VALUES ($1, $2)
                     ON CONFLICT (link) DO UPDATE
-                    SET work = EXCLUDED.work
-                ''', proxy, proxies[proxy])        
+                    SET work = EXCLUDED.work, time = EXCLUDED.time
+                ''', proxy, proxies[proxy], now())       
+
+async def get_free_proxy(pool=POOL):
+    if pool is None:
+        pool = await get_pool()  # Получаем пул соединений, если он не был передан
+    
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            proxy = await conn.fetchrow(f'''
+                SELECT link, work FROM "{SCHEMAS["CONFIG"]}".proxy
+                WHERE work = false LIMIT 1
+            ''')
+            
+            if not proxy:
+                proxy = await conn.fetchrow(f'''
+                    SELECT link, work FROM "{SCHEMAS["CONFIG"]}".proxy
+                    ORDER BY RANDOM() LIMIT 1
+                ''')
+                
+            await set_proxy({proxy['link']: True}, pool=pool)
+    
+    return {'link':proxy['link'], 'work': proxy['work']} if proxy else None
+
 
 
 

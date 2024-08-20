@@ -6,7 +6,7 @@ import aiohttp
 import uuid
 import os
 from random import randint
-from database import log_timestamp, get_proxies, set_proxy
+from database import log_timestamp, get_proxies, set_proxy, get_free_proxy
 
 # Load configuration
 config = json.loads(open('config.json').read())
@@ -15,27 +15,7 @@ PROXY_LIST = [{'link': x['link'], 'work': x['work']} for x in PROXY_LIST]  # Loa
 farmed_keys, attempts = 0, {}
 users = [x for x in config['EVENTS']]
 
-def get_random_proxy():
-    global PROXY_LIST
-    r_r = random.choice(PROXY_LIST)
-    return r_r
-
-async def get_free_proxy():
-    for proxy in PROXY_LIST:
-        if not proxy['work']:  # Проверяем, что прокси не работает
-            await set_work_proxy(proxy['link'], True)
-            return proxy
-    return get_random_proxy()
-
-async def set_work_proxy(proxy:str, work=True):
-    for p in PROXY_LIST:
-        if p['link'] == proxy:  # Сравнение строки с полем 'proxy'
-            p['work'] = work
-            await set_proxy({p['link']: p['work']})
-            return
-    logger.warning(f"Прокси {proxy} не найден в списке.")
-
-def get_logger(file_level=logging.DEBUG, console_level=logging.INFO, base_level=logging.DEBUG):
+def get_logger(file_level=logging.DEBUG, console_level=logging.DEBUG, base_level=logging.DEBUG):
     # Создаем логгер
     logger = logging.getLogger("logger")
     logger.setLevel(base_level)  # Устанавливаем базовый уровень логирования
@@ -55,7 +35,8 @@ def get_logger(file_level=logging.DEBUG, console_level=logging.INFO, base_level=
 
     # Создаем обработчик для вывода в консоль
     console_handler = logging.StreamHandler()
-    console_handler.setLevel(console_level)  # Устанавливаем уровень логирования для консоли
+    console_lvl = logging.DEBUG if config['DEBUG_LOG'] else logging.INFO
+    console_handler.setLevel(console_lvl)  # Устанавливаем уровень логирования для консоли
 
     # Создаем форматтер
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -84,9 +65,10 @@ def generate_loading_bar(progress=0, length=15, max=100) -> str:
 def delay_random() -> float:
     return random.random() + 1
 
-async def delay(ms) -> None:
+async def delay(ms, comment="") -> None:
     ms += delay_random()
-    logger.debug(f"Waiting {ms}ms")
+    _ = f'({comment})' if comment else ''
+    logger.debug(f"Waiting {ms}ms {_}")
     await asyncio.sleep(ms / 1000)
 
 async def fetch_api(session: aiohttp.ClientSession, path: str, body: dict, auth: str = None) -> dict:
@@ -108,8 +90,8 @@ async def fetch_api(session: aiohttp.ClientSession, path: str, body: dict, auth:
                 logger.debug(f'Response Status: {res.status}')
 
             if not res.ok:
-                await asyncio.sleep(10)
-                set_work_proxy(proxy['link'], False)
+                await delay(config['DELAY'] * 1000, "API error")
+                await set_proxy({proxy['link']: False})
                 raise Exception(f"{res.status} {res.reason}")
 
             # Парсинг только JSON (экономия трафика)
@@ -119,13 +101,13 @@ async def fetch_api(session: aiohttp.ClientSession, path: str, body: dict, auth:
 
     finally:
         # Независимо от успеха или ошибки, освобождаем прокси
-        await set_work_proxy(proxy['link'], False)
+        await set_proxy({proxy['link']: False})
 
 
 async def get_key(session, game_key):
     
     if config['DEBUG']:
-        await asyncio.sleep(randint(config['DEBUG_DELAY'] // 2, config['DEBUG_DELAY']) / 1000)
+        await delay(randint(config['DEBUG_DELAY'] // 2, config['DEBUG_DELAY']), "Debug key delay")
         game_key = 'C0D3'
         return config['DEBUG_KEY'] + "-" + "".join([random.choice("0123456789ABCDE") for _ in range(16)])
         
@@ -139,13 +121,13 @@ async def get_key(session, game_key):
         'clientOrigin': 'ios'
     }
     login_client_data = await fetch_api(session, '/promo/login-client', body)
-    await delay(delay_ms)
+    await delay(delay_ms, "Login delay")
 
     auth_token = login_client_data['clientToken']
     promo_code = None
 
     for attempt in range(config['MAX_RETRY']):
-        # asyncio.sleep(config['DELAY'])
+        # delay(config['DELAY'] * 1000)
         logger.debug(f"Attempt {attempt + 1} of {config['MAX_RETRY']} for {game_key}...")
         body = {
             'promoId': game_config['PROMO_ID'],
@@ -155,7 +137,7 @@ async def get_key(session, game_key):
         register_event_data = await fetch_api(session, '/promo/register-event', body, auth_token)
 
         if not register_event_data.get('hasCode'):
-            await delay(delay_ms)
+            await delay(delay_ms, "Event delay")
             continue
 
         body = {
@@ -167,7 +149,7 @@ async def get_key(session, game_key):
         if promo_code:
             break
 
-        await delay(delay_ms)
+        await delay(delay_ms, "Code delay")
 
     if promo_code is None:
         logger.error('Failed to generate promo code after maximum retries')

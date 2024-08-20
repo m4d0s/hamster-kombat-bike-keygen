@@ -1,20 +1,21 @@
 {
-    "API_TOKEN": "7371621001:AAHsVcx8uNHDUoMp61kfTO27GJQV6IJEnwc",
-    "DEV_ID": 5043492422,
-    "MAIN_GROUP": -1002167390063,
-    "MAIN_CHANNEL": -1002215114043,
+    "API_TOKEN": "",
+    "DEV_ID": 0,
+    "MAIN_GROUP": 0,
+    "MAIN_CHANNEL": 0,
+    "COUNT": 0,
     "DELAY": 30,
     "MAX_RETRY": 10,
-    "COUNT": 16,
     "DB": {
         "HOST": "127.0.0.1",
-        "PORT": 5433,
-        "USER": "myuser",
-        "PASSWORD": "7IBkzyuOraiK",
-        "NAME": "hamster",
+        "PORT": 5432,
+        "USER": "postgres",
+        "PASSWORD": "password",
+        "NAME": "postgres",
         "SSL": false
     },
-    "DEBUG": true,
+    "DEBUG": false,
+    "DEBUG_LOG": true,
     "DEBUG_DELAY": 10000,
     "DEBUG_KEY": "C0D3-TH1S-1S-JU5T-T35T",
     "DEBUG_GAME": "C0D3",
@@ -33,7 +34,8 @@
             "EVENTS_DELAY": [
                 20000,
                 25000
-            ]
+            ],
+            "DISABLED": true
         },
         "CUBE": {
             "NAME": "Chain Cube 2048",
@@ -42,7 +44,8 @@
             "EVENTS_DELAY": [
                 20000,
                 25000
-            ]
+            ],
+            "DISABLED": false
         },
         "TRAIN": {
             "NAME": "Train Miner",
@@ -51,7 +54,8 @@
             "EVENTS_DELAY": [
                 120000,
                 125000
-            ]
+            ],
+            "DISABLED": false
         },
         "CLONE": {
             "NAME": "My Clone Army",
@@ -60,7 +64,8 @@
             "EVENTS_DELAY": [
                 120000,
                 125000
-            ]
+            ],
+            "DISABLED": false
         },
         "MERGE": {
             "NAME": "Merge Away",
@@ -69,7 +74,8 @@
             "EVENTS_DELAY": [
                 20000,
                 25000
-            ]
+            ],
+            "DISABLED": false
         },
         "TWERK": {
             "NAME": "Twerk Race",
@@ -78,7 +84,8 @@
             "EVENTS_DELAY": [
                 20000,
                 25000
-            ]
+            ],
+            "DISABLED": false
         }
     }
 }
