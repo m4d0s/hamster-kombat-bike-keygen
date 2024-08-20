@@ -6,7 +6,7 @@
     "COUNT": 0,
     "DELAY": 30,
     "MAX_RETRY": 10,
-    "MINING": true,
+    "MINING": false,
     "DB": "postgresql://postgres:password@127.0.0.1:5432/postgres",
     "DEBUG": false,
     "DEBUG_LOG": true,

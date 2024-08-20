@@ -1,11 +1,17 @@
 import logging
 import asyncio
 import aiohttp
+import aiofiles
 import asyncpg
 import json
+import os
+import sys
 
 from generate import get_key, get_logger
 from database import insert_key_generation, get_pool, get_proxies
+
+
+# Function to load the JSON config asynchronously
 
 with open('config.json') as f:
     config = json.load(f)
@@ -14,35 +20,30 @@ async def new_key(session: aiohttp.ClientSession, game: str, pool: asyncpg.Pool,
     logger.info(f"Generating new key for {game}")
     try:
         key = await get_key(session, game)
-        if config['DEBUG_KEY'] in key:
-            game = config['DEBUG_GAME']
         if key:
             logger.info(f"Key for game {game} generated: {key}")
-            await insert_key_generation(0, key, game, used=False, pool=pool)  # Ensure pool is passed
+            await insert_key_generation(0, key, game, used=False, pool=pool)
         else:
             logger.warning(f"Failed to generate key for game {game}")
+
     except Exception as e:
         logger.error(f"Error generating key for {game}: {e}")
 
-async def generating_loop(pool: asyncpg.Pool, limit: int, logger: logging.Logger) -> None:
-    semaphore = asyncio.Semaphore(limit)
+async def main() -> None:
     events = [x for x in config['EVENTS']]
-    async with aiohttp.ClientSession() as session:
-        tasks = []
-        for i in range(limit):
-            async with semaphore:
-                task = asyncio.create_task(new_key(session, events[i % len(events)], pool=pool, logger=logger))
-                tasks.append(task)
-        await asyncio.gather(*tasks)
-
-async def mining(pool: asyncpg.Pool) -> None:
+    proxy = await get_proxies()
+    limit = min(int(len(proxy)*0.8+1), config['GEN_PROXY'])
     logger = get_logger()
-    await asyncio.sleep(5)  # Это можно оставить, если это часть начальной задержки
+    pool = await get_pool()
 
-    proxy = await get_proxies(pool)
-    limit = min(config['GEN_PROXY'], int(len(proxy) * 0.8) + 1)
+    async with aiohttp.ClientSession() as session:
+        i = 0
+        while True:
+            tasks = []
+            while len(tasks) < limit:
+                tasks.append(asyncio.create_task(new_key(session, events[i % len(events)], pool=pool, logger=logger)))
+                i += 1
+            await asyncio.gather(*tasks)
 
-    while True:
-        await generating_loop(pool, limit, logger)
-        # Добавляем небольшую задержку, чтобы другие задачи могли выполняться
-        await asyncio.sleep(0.1) 
+if __name__ == '__main__' and config['MINING']:
+    asyncio.run(main())

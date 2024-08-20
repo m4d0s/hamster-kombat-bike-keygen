@@ -80,12 +80,11 @@ async def fetch_api(session: aiohttp.ClientSession, path: str, body: dict, auth:
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(url, headers=headers, json=body, proxy=proxy_str) as res:
-                if config['DEBUG_LOG']:
-                    logger.debug(f"Using proxy: {proxy['link']}")
-                    logger.debug(f'URL: {url}')
-                    logger.debug(f'Headers: {headers}')
-                    logger.debug(f'Body: {body}')
-                    logger.debug(f'Response Status: {res.status}')
+                logger.debug(f'Using proxy: {proxy["link"].split("@")[1] if proxy else "localhost"}')
+                logger.debug(f'URL: {url}')
+                logger.debug(f'Headers: {headers}')
+                logger.debug(f'Body: {body}')
+                logger.debug(f'Response Status: {res.status}')
 
                 if not res.ok:
                     await delay(config['DELAY'] * 1000, "API error")
@@ -109,50 +108,53 @@ async def get_key(session, game_key):
         return config['DEBUG_KEY'] + "-" + "".join([random.choice("0123456789ABCDE") for _ in range(16)])
        
     proxy = await get_free_proxy()    
-    game_config = config['EVENTS'][game_key]
-    delay_ms = randint(config['EVENTS'][game_key]['EVENTS_DELAY'][0], config['EVENTS'][game_key]['EVENTS_DELAY'][1])
-    client_id = str(uuid.uuid4())
-
-    body = {
-        'appToken': game_config['APP_TOKEN'],
-        'clientId': client_id,
-        'clientOrigin': 'ios'
-    }
-    login_client_data = await fetch_api(session, '/promo/login-client', body, proxy=proxy)
-    await delay(delay_ms, "Login delay")
-
-    auth_token = login_client_data['clientToken']
-    promo_code = None
-
-    for attempt in range(config['MAX_RETRY']):
-        # delay(config['DELAY'] * 1000)
-        logger.debug(f"Attempt {attempt + 1} of {config['MAX_RETRY']} for {game_key}...")
-        body = {
-            'promoId': game_config['PROMO_ID'],
-            'eventId': str(uuid.uuid4()),
-            'eventOrigin': 'undefined'
-        }
-        register_event_data = await fetch_api(session, '/promo/register-event', body, auth_token, proxy=proxy)
-
-        if not register_event_data.get('hasCode'):
-            await delay(delay_ms, "Event delay")
-            continue
+    try:
+        game_config = config['EVENTS'][game_key]
+        delay_ms = randint(config['EVENTS'][game_key]['EVENTS_DELAY'][0], config['EVENTS'][game_key]['EVENTS_DELAY'][1])
+        client_id = str(uuid.uuid4())
 
         body = {
-            'promoId': game_config['PROMO_ID'],
+            'appToken': game_config['APP_TOKEN'],
+            'clientId': client_id,
+            'clientOrigin': 'ios'
         }
-        create_code_data = await fetch_api(session, '/promo/create-code', body, auth_token, proxy=proxy)
+        login_client_data = await fetch_api(session, '/promo/login-client', body, proxy=proxy)
+        await delay(delay_ms, "Login delay")
 
-        promo_code = create_code_data.get('promoCode')
-        if promo_code:
-            break
+        auth_token = login_client_data['clientToken']
+        promo_code = None
 
-        await delay(delay_ms, "Code delay")
+        for attempt in range(config['MAX_RETRY']):
+            # delay(config['DELAY'] * 1000)
+            logger.debug(f"Attempt {attempt + 1} of {config['MAX_RETRY']} for {game_key}...")
+            body = {
+                'promoId': game_config['PROMO_ID'],
+                'eventId': str(uuid.uuid4()),
+                'eventOrigin': 'undefined'
+            }
+            register_event_data = await fetch_api(session, '/promo/register-event', body, auth_token, proxy=proxy)
 
-    if promo_code is None:
-        logger.error('Failed to generate promo code after maximum retries')
-        return None
+            if not register_event_data.get('hasCode'):
+                await delay(delay_ms, "Event delay")
+                continue
 
-    await set_proxy({proxy['link']: False})
+            body = {
+                'promoId': game_config['PROMO_ID'],
+            }
+            create_code_data = await fetch_api(session, '/promo/create-code', body, auth_token, proxy=proxy)
+
+            promo_code = create_code_data.get('promoCode')
+            if promo_code:
+                break
+
+            await delay(delay_ms, "Code delay")
+
+        if promo_code is None:
+            logger.error('Failed to generate promo code after maximum retries')
+            return None
+    except Exception as e:
+        logger.error(f'Error get_key: {e}')
+    finally:
+        await set_proxy({proxy['link']: False})
 
     return promo_code

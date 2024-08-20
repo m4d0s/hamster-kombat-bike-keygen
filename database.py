@@ -11,13 +11,19 @@ with open('config.json') as f:
 
 SCHEMAS = config['SCHEMAS']
 POOL = None
+MINING_POOL = None
 
 #base
-async def get_pool() -> asyncpg.Pool:
-    global POOL
-    if POOL is None:
-        POOL = await asyncpg.create_pool(dsn=config['DB'])
-    return POOL
+async def get_pool(mining=False) -> asyncpg.Pool:
+    global POOL, MINING_POOL
+    if not mining:
+        if POOL is None:
+            POOL = await asyncpg.create_pool(dsn=config['DB'])
+        return POOL
+    else:
+        if MINING_POOL is None:
+            MINING_POOL = await asyncpg.create_pool(dsn=config['DB'])
+        return MINING_POOL
 
 #config
 async def get_config(pool=POOL):
@@ -207,13 +213,15 @@ async def insert_task(task: dict, check: int = 1, task_type: str = 'task', expir
             record = await conn.fetchrow(
                 f'''
                 INSERT INTO "{SCHEMAS["PROMOTION"]}".promo (name, "desc", link, check_id, control, type, time, expire) 
-                VALUES ($1, $2, $3, $4, $5, $6, $7)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
                 ON CONFLICT (check_id) 
                 DO UPDATE SET 
                     name = EXCLUDED.name, 
                     "desc" = EXCLUDED."desc", 
                     link = EXCLUDED.link, 
-                    control = EXCLUDED.control 
+                    control = EXCLUDED.control,
+                    time = EXCLUDED.time,
+                    expire = EXCLUDED.expire
                 RETURNING id
                 ''',
                 task['name'], task['desc'], task['link'], task['check_id'], check, task_type, now(), task['expire']
@@ -223,7 +231,7 @@ async def insert_task(task: dict, check: int = 1, task_type: str = 'task', expir
             
             # Insert or update translations
             for lang, translations in task.items():
-                if lang in ['name', 'desc', 'link', 'check_id', 'id']:  # Skip non-translation keys
+                if lang in ['name', 'desc', 'link', 'check_id', 'id', 'control', 'type', 'time', 'expire', 'day']:  # Skip non-translation keys
                     continue
                 
                 for obj, value in translations.items():

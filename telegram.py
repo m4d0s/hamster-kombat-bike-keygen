@@ -2,12 +2,15 @@ import asyncio
 import aiohttp
 import json
 import re
+import os
 import random
 import traceback
 from io import BytesIO
 from multiprocessing import Process
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures import ThreadPoolExecutor
+import threading
+import time
 
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ParseMode
@@ -15,7 +18,7 @@ from aiogram.utils.exceptions import (MessageNotModified, MessageToDeleteNotFoun
                                       BotBlocked, MessageIsTooLong, MessageToEditNotFound, MessageCantBeDeleted,
                                       BadRequest, MessageCantBeEdited, UserDeactivated)
 
-from solo import mining
+# from solo import mining
 from generate import generate_loading_bar, get_key, logger, delay
 from database import (insert_key_generation, get_last_user_key, get_all_user_ids, now, get_promotions, update_proxy_work,
                       get_unused_key_of_type, relative_time, get_all_user_keys_24h, insert_user, format_remaining_time, 
@@ -439,7 +442,7 @@ async def send_error_message(chat_id:int, message:str, e:Exception = None, only_
         await try_to_delete(chat_id, cache['error'])
     if e is not None:
         err_t = f'Error: {e}' if str(e) else ''
-        logger.error("\n".join(traceback.format_stack()[-3:]) + f'\t{err_t}')
+        logger.error(traceback.format_stack()[-2].split('\n')[0].strip() + f'\t{err_t}')
     ERROR_MESS = await new_message(text=message, chat_id=chat_id, keyboard=keyboard)
     cache['error'] = ERROR_MESS.message_id
     await set_cached_data(chat_id, cache) ##write
@@ -1184,6 +1187,8 @@ async def reply_to_task(message: types.Message) -> None:
                     return
                 control = 0
                 
+            
+                
             if first:
                 for key in dict_task[lang]:
                     dict_task[key] = dict_task[lang][key]
@@ -1191,7 +1196,7 @@ async def reply_to_task(message: types.Message) -> None:
 
     keyboard = InlineKeyboardMarkup().add(InlineKeyboardButton(text=translate[cache['lang']]['reply_to_task'][0], callback_data='main_menu'))
 
-    dict_task['day'] = int(dict_task['day']) or 99999
+    dict_task['day'] = int(dict_task['day']) if 'day' in dict_task else 99999
     # Вызов новой функции для вставки задачи и обновления JSON
     dict_task['id'] = await insert_task(dict_task, check=control, expire=now()+dict_task['day']*86400, pool=POOL)  # передайте pool, который используется в insert_task_by_id
     if not dict_task['id']:
@@ -1275,12 +1280,8 @@ async def process_callback_other_games(callback_query: types.CallbackQuery) -> N
 
 
 
-
-
-
 async def on_startup(dp):
     global POOL, BOT_INFO
-    # Ваш код для инициализации
     POOL = await get_pool()  # Создание пула
     logger.info('DB pool created...')
 
@@ -1297,11 +1298,8 @@ async def on_startup(dp):
     logger.info("Send warning message to everyone who tried to generate key before....")
 
     # Запуск майнинга в отдельном потоке, если включено в конфигурации
-    if json_config['MINING']:
-        # Запуск в отдельном потоке
-        with ThreadPoolExecutor() as executor:
-            executor.submit(start_mining, POOL)
-        logger.info("Mining process started in a separate thread...")
+    # if json_config['MINING']:
+    #     asyncio.create_task(mining(POOL))
 
     # Подготовка сообщения для разработчика
     stop_button = InlineKeyboardMarkup().add(InlineKeyboardButton(text="Main menu", callback_data="main_menu"))
@@ -1311,9 +1309,7 @@ async def on_startup(dp):
     }
     await update_report(db_config['DEV_ID'], text, stop_button, users_id, True)
 
-def start_mining(pool):
-    asyncio.run(mining(pool))
-
 if __name__ == '__main__':
-    # Запуск бота
+    # Запуск бота и ожидание завершения его работы
+    asyncio.get_event_loop().set_debug(True)
     executor.start_polling(dp, skip_updates=True, on_startup=on_startup)
