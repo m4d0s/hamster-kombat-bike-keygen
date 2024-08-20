@@ -6,14 +6,8 @@
     "COUNT": 0,
     "DELAY": 30,
     "MAX_RETRY": 10,
-    "DB": {
-        "HOST": "127.0.0.1",
-        "PORT": 5432,
-        "USER": "postgres",
-        "PASSWORD": "password",
-        "NAME": "postgres",
-        "SSL": false
-    },
+    "MINING": true,
+    "DB": "postgresql://postgres:password@127.0.0.1:5432/postgres",
     "DEBUG": false,
     "DEBUG_LOG": true,
     "DEBUG_DELAY": 10000,

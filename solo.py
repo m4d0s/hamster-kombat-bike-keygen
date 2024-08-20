@@ -35,14 +35,14 @@ async def generating_loop(pool: asyncpg.Pool, limit: int, logger: logging.Logger
                 tasks.append(task)
         await asyncio.gather(*tasks)
 
-async def main() -> None:
+async def mining(pool: asyncpg.Pool) -> None:
     logger = get_logger()
-    pool = await get_pool()
+    await asyncio.sleep(5)  # Это можно оставить, если это часть начальной задержки
+
     proxy = await get_proxies(pool)
     limit = min(config['GEN_PROXY'], int(len(proxy) * 0.8) + 1)
 
     while True:
         await generating_loop(pool, limit, logger)
-
-if __name__ == '__main__':
-    asyncio.run(main())
+        # Добавляем небольшую задержку, чтобы другие задачи могли выполняться
+        await asyncio.sleep(0.1) 

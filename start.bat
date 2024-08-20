@@ -3,6 +3,6 @@ python.exe -m pip install --upgrade pip
 pip install -r req.txt
 
 start python telegram.py
-timeout /t 15 /nobreak
-start python solo.py
+@REM timeout /t 15 /nobreak
+@REM start python solo.py
 

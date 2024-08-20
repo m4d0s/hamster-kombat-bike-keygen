@@ -9,30 +9,14 @@ def log_timestamp():
 with open('config.json') as f:
     config = json.load(f)
 
-db_config = {
-    'database': config['DB']['NAME'],
-    'user': config['DB']['USER'],
-    'password': config['DB']['PASSWORD'],
-    'host': config['DB']['HOST'],
-    'port': config['DB']['PORT']
-}
-
 SCHEMAS = config['SCHEMAS']
-SSL_MODE = config['DB']['SSL']  # Assumes SSL configuration is handled correctly
 POOL = None
 
 #base
 async def get_pool() -> asyncpg.Pool:
     global POOL
     if POOL is None:
-        POOL = await asyncpg.create_pool(
-            database=db_config['database'],
-            user=db_config['user'],
-            password=db_config['password'],
-            host=db_config['host'],
-            port=db_config['port'],
-            ssl=SSL_MODE
-        )
+        POOL = await asyncpg.create_pool(dsn=config['DB'])
     return POOL
 
 #config
@@ -104,7 +88,7 @@ async def set_proxy(proxies:dict, pool=POOL):
             for proxy in proxies:
                 await conn.execute(f'''
                     INSERT INTO "{SCHEMAS["CONFIG"]}".proxy (link, work, time)
-                    VALUES ($1, $2)
+                    VALUES ($1, $2, $3)
                     ON CONFLICT (link) DO UPDATE
                     SET work = EXCLUDED.work, time = EXCLUDED.time
                 ''', proxy, proxies[proxy], now())       
@@ -180,8 +164,8 @@ async def get_promotions(task_type: str = 'task', pool=None):
         async with conn.transaction():
             # Получаем все промо по типу
             promo_rows = await conn.fetch(
-                f'SELECT * FROM "{SCHEMAS["PROMOTION"]}".promo WHERE type = $1',
-                task_type
+                f'SELECT * FROM "{SCHEMAS["PROMOTION"]}".promo WHERE type = $1 and expire > $2',
+                task_type, now()
             )
             # Преобразуем строки в словарь
             result = {str(row['id']): dict(row) for row in promo_rows}
@@ -207,20 +191,23 @@ async def get_promotions(task_type: str = 'task', pool=None):
 
     return result
 
-async def insert_task(task: dict, check: int = 1, task_type: str = 'task', pool=None) -> int:
+async def insert_task(task: dict, check: int = 1, task_type: str = 'task', expire=9999999999999, pool=None) -> int:
     if not task:
         return None
     
     if not pool:
         pool = await get_pool()
+        
+    if 'expire' not in task:
+        task['expire'] = expire
     
     async with pool.acquire() as conn:
         async with conn.transaction():
             # Insert or update the main task record
             record = await conn.fetchrow(
                 f'''
-                INSERT INTO "{SCHEMAS["PROMOTION"]}".promo (name, "desc", link, check_id, control, type) 
-                VALUES ($1, $2, $3, $4, $5, $6)
+                INSERT INTO "{SCHEMAS["PROMOTION"]}".promo (name, "desc", link, check_id, control, type, time, expire) 
+                VALUES ($1, $2, $3, $4, $5, $6, $7)
                 ON CONFLICT (check_id) 
                 DO UPDATE SET 
                     name = EXCLUDED.name, 
@@ -229,7 +216,7 @@ async def insert_task(task: dict, check: int = 1, task_type: str = 'task', pool=
                     control = EXCLUDED.control 
                 RETURNING id
                 ''',
-                task['name'], task['desc'], task['link'], task['check_id'], check, task_type
+                task['name'], task['desc'], task['link'], task['check_id'], check, task_type, now(), task['expire']
             )
             
             task_id = record['id']
@@ -338,7 +325,6 @@ async def get_unused_key_of_type(key_type:str, pool=POOL, day = 1.0) -> str:
     async with pool.acquire() as conn:
         async with conn.transaction():
             row = await conn.fetchrow(progression_query, key_type, now()  - 86400 * abs(day))
-            # row = await conn.fetchrow(regression_query, key_type, get_utc_time(0, 0, 0, False))
     
     return row['key'] if row else None
 

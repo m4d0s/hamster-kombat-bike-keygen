@@ -5,6 +5,9 @@ import re
 import random
 import traceback
 from io import BytesIO
+from multiprocessing import Process
+from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ParseMode
@@ -12,6 +15,7 @@ from aiogram.utils.exceptions import (MessageNotModified, MessageToDeleteNotFoun
                                       BotBlocked, MessageIsTooLong, MessageToEditNotFound, MessageCantBeDeleted,
                                       BadRequest, MessageCantBeEdited, UserDeactivated)
 
+from solo import mining
 from generate import generate_loading_bar, get_key, logger, delay
 from database import (insert_key_generation, get_last_user_key, get_all_user_ids, now, get_promotions, update_proxy_work,
                       get_unused_key_of_type, relative_time, get_all_user_keys_24h, insert_user, format_remaining_time, 
@@ -55,7 +59,7 @@ async def reload_config(config_path='config.json', pool=POOL):
     }
     
     dont_touch = ["EVENTS", "SCHEMAS", "DEBUG_DELAY", "DEBUG_KEY", "DEBUG", "DB", "DEBUG_GAME",
-                  "GEN_PROXY", "MAX_RETRY", "DELAY", "DEBUG_LOG"]
+                  "GEN_PROXY", "MAX_RETRY", "DELAY", "DEBUG_LOG", "MINING"]
     need_to = ["DEV_ID", "API_TOKEN", "COUNT", "MAIN_GROUP", "MAIN_CHANNEL", "PROXY"]
     
     # Инициализация итогового конфига
@@ -117,7 +121,6 @@ sem = asyncio.Semaphore(25)
 
 #Cache funcs
 async def set_cached_data(user:int, data:dict, pool=POOL):
-    await reload_config()
     data_copy = data.copy()
     data_copy.pop('id', None)
     data_copy.pop('lang', None)
@@ -127,7 +130,6 @@ async def set_cached_data(user:int, data:dict, pool=POOL):
     await write_cached_data(user, data_copy, pool=pool) 
 
 async def get_cached_data(user_id:int) -> tuple:
-    await reload_config()
     user = await get_user(user_id, pool=POOL)
     cache_default = {'user_id':None, 
                      'welcome':None, 
@@ -212,6 +214,7 @@ async def update_loadbar(chat_id: int, game_key: str, session: aiohttp.ClientSes
         if free_key is not None:
             keys.append(free_key)
             loadbars[i] = snippet['bold'].format(text=game_key + ": ") + snippet['code'].format(text=free_key)
+            await insert_key_generation(chat_id, free_key, game_key, used=True, pool=POOL)
             continue
         
         task = asyncio.create_task(get_key(session, game_key))
@@ -801,22 +804,23 @@ async def generate_key(callback_query: types.CallbackQuery) -> None:
             await set_cached_data(message.chat.id, cache) ##write
             try:
                 async with aiohttp.ClientSession() as session:
-                    cache['process'] = False
-                    await try_to_edit(text=message.html_text, chat_id=message.chat.id, message_id=message.message_id, keyboard=stop_button)
+                    # cache['process'] = False
                     key = await update_loadbar(message.chat.id, game_key, session, count)
-                    await set_cached_data(message.chat.id, cache) ##write
-                    cache['process'] = True
-                    if key is not None:
-                        await try_to_delete(message.chat.id, cache['loading'])
-                        for k in key:
-                            await insert_key_generation(message.chat.id, k, game_key, pool=POOL)
-                        key_text = '\n'.join([snippet['bold'].format(text=game_key) + ": " + snippet['code'].format(text=k) if k else '' for k in key]) \
-                                    if len(key) > 0 else translate[cache['lang']]['generate_key'][2]
-                        stop_button = InlineKeyboardMarkup().add(InlineKeyboardButton(text=translate[cache['lang']]['generate_key'][7], callback_data="main_menu"))
-                        LOADING_MESS = await new_message(text=translate[cache['lang']]['generate_key'][3].replace('{key}', key_text), chat_id=message.chat.id, keyboard=stop_button)
-                        cache['loading'] = LOADING_MESS.message_id
-                        await set_cached_data(message.chat.id, cache) ##write
-                    cache['process'] = True
+                await try_to_edit(text=message.html_text, chat_id=message.chat.id, message_id=message.message_id, keyboard=stop_button)
+                
+                # await set_cached_data(message.chat.id, cache) ##write
+                cache['process'] = True
+                await try_to_delete(message.chat.id, cache['loading'])
+                if key:
+                    for k in key:
+                        await insert_key_generation(message.chat.id, k, game_key, pool=POOL)
+                key_text = '\n'.join([snippet['bold'].format(text=game_key) + ": " + snippet['code'].format(text=k) for k in key if k is not None]) \
+                            if key and len(key) > 0 else translate[cache['lang']]['generate_key'][2]
+                stop_button = InlineKeyboardMarkup().add(InlineKeyboardButton(text=translate[cache['lang']]['generate_key'][7], callback_data="main_menu"))
+                LOADING_MESS = await new_message(text=translate[cache['lang']]['generate_key'][3].replace('{key}', key_text), chat_id=message.chat.id, keyboard=stop_button)
+                cache['loading'] = LOADING_MESS.message_id
+                await set_cached_data(message.chat.id, cache) ##write
+                cache['process'] = True
             except Exception as e:
                 if cache['loading']:
                     await try_to_delete(message.chat.id, cache['loading'])
@@ -993,7 +997,8 @@ async def generate_task_message(callback_query: types.CallbackQuery) -> None:
             .replace('{task}', current_task['name']), 
             only_dev=True
         )
-        await delete_task_by_id(int(task_id), pool=POOL) if isinstance(ChatNotFound, Exception) else await insert_task(current_task, check=0, pool=POOL)
+        await delete_task_by_id(int(task_id), pool=POOL) if isinstance(ChatNotFound, Exception) \
+            else await insert_task(current_task, check=0, pool=POOL)
         is_task_completed = False
 
     # Проверяем выполненные задания
@@ -1186,8 +1191,9 @@ async def reply_to_task(message: types.Message) -> None:
 
     keyboard = InlineKeyboardMarkup().add(InlineKeyboardButton(text=translate[cache['lang']]['reply_to_task'][0], callback_data='main_menu'))
 
+    dict_task['day'] = int(dict_task['day']) or 99999
     # Вызов новой функции для вставки задачи и обновления JSON
-    dict_task['id'] = await insert_task(dict_task, check=control, pool=POOL)  # передайте pool, который используется в insert_task_by_id
+    dict_task['id'] = await insert_task(dict_task, check=control, expire=now()+dict_task['day']*86400, pool=POOL)  # передайте pool, который используется в insert_task_by_id
     if not dict_task['id']:
         await send_error_message(message.chat.id, translate[cache['lang']]['send_task_example'][3])
         return
@@ -1269,18 +1275,45 @@ async def process_callback_other_games(callback_query: types.CallbackQuery) -> N
 
 
 
-#main
-if __name__ == '__main__':
-    POOL = asyncio.get_event_loop().run_until_complete(get_pool())
-    BOT_INFO = asyncio.get_event_loop().run_until_complete(bot.get_me())
-    users_id = asyncio.get_event_loop().run_until_complete(update_cache_process(POOL))
-    asyncio.get_event_loop().run_until_complete(update_proxy_work(POOL))
+
+
+
+async def on_startup(dp):
+    global POOL, BOT_INFO
+    # Ваш код для инициализации
+    POOL = await get_pool()  # Создание пула
+    logger.info('DB pool created...')
+
+    # Получение информации о боте
+    BOT_INFO = await bot.get_me()
+    logger.info('Telegram bot created... ID: %s, username: @%s', BOT_INFO.id, BOT_INFO.username)
+
+    # Обновление кэша пользователей
+    users_id = await update_cache_process(POOL)
+    logger.info('Free all proxies from work...')
+
+    # Обновление статуса прокси
+    await update_proxy_work(POOL)
     logger.info("Send warning message to everyone who tried to generate key before....")
-    
+
+    # Запуск майнинга в отдельном потоке, если включено в конфигурации
+    if json_config['MINING']:
+        # Запуск в отдельном потоке
+        with ThreadPoolExecutor() as executor:
+            executor.submit(start_mining, POOL)
+        logger.info("Mining process started in a separate thread...")
+
+    # Подготовка сообщения для разработчика
     stop_button = InlineKeyboardMarkup().add(InlineKeyboardButton(text="Main menu", callback_data="main_menu"))
-    text = {"ru": "Бот перезапущен, пожалуйста, сгенеруйте ключ заново (/start)", 
-            "en": "Bot now restarted, please generate key again (/start)"}
-    asyncio.get_event_loop().run_until_complete(update_report(db_config['DEV_ID'], text, stop_button, users_id, True))
-    
-    logger.info('Telegram bot started...')
-    executor.start_polling(dp, skip_updates=True)
+    text = {
+        "ru": "Бот перезапущен, пожалуйста, сгенеруйте ключ заново (/start)", 
+        "en": "Bot now restarted, please generate key again (/start)"
+    }
+    await update_report(db_config['DEV_ID'], text, stop_button, users_id, True)
+
+def start_mining(pool):
+    asyncio.run(mining(pool))
+
+if __name__ == '__main__':
+    # Запуск бота
+    executor.start_polling(dp, skip_updates=True, on_startup=on_startup)
