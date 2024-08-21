@@ -17,7 +17,7 @@ users = [x for x in config['EVENTS']]
 
 def get_logger(file_level=logging.DEBUG, console_level=logging.DEBUG, base_level=logging.DEBUG):
     # Создаем логгер
-    asyncio.get_event_loop().set_debug(config['DEBUG_LOG'])
+    # asyncio.get_event_loop().set_debug(config['DEBUG_LOG'])
     logger = logging.getLogger("logger")
     logger.setLevel(base_level)  # Устанавливаем базовый уровень логирования
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')

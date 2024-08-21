@@ -1372,6 +1372,7 @@ async def delete_file(file_path):
 async def send_files(callback_query: types.CallbackQuery):
     chat = callback_query.message.chat
     cache = await get_cached_data(chat.id)
+    semaphore = asyncio.Semaphore(25)
     if not cache['process']:
         return
     cache['process'] = False
@@ -1391,8 +1392,21 @@ async def send_files(callback_query: types.CallbackQuery):
     promo = await get_promotions(pool=POOL)
     chat_ids = set(promo[x]['check_id'] for x in promo) | set(promo[x].get('chat_id') for x in promo if 'chat_id' in x and promo[x].get('chat_id'))
 
-    user_tasks = [asyncio.create_task(get_user_info(user)) for user in users]
-    chat_tasks = [asyncio.create_task(get_chat_info(chat_id)) for chat_id in chat_ids]
+    user_tasks = []
+    chat_tasks = []
+    
+    async def bounded_get_user_info(user):
+        async with semaphore:
+            return await get_user_info(user)
+    
+    async def bounded_get_chat_info(chat_id):
+        async with semaphore:
+            return await get_chat_info(chat_id)
+
+    for user in users:
+        user_tasks.append(asyncio.create_task(bounded_get_user_info(user)))
+    for chat_id in chat_ids:
+        chat_tasks.append(asyncio.create_task(bounded_get_chat_info(chat_id)))
 
     while any(not task.done() for task in user_tasks + chat_tasks):
         cache = await get_cached_data(chat.id)
@@ -1411,9 +1425,7 @@ async def send_files(callback_query: types.CallbackQuery):
         return
         
     cache['process'] = True
-        
     await try_to_delete(chat_id=chat.id, message_id=cache['loading'])
-
     cache['loading'] = None
 
     members_list = "\n".join(task.result() for task in user_tasks if task.result())
@@ -1430,7 +1442,7 @@ async def send_files(callback_query: types.CallbackQuery):
     empty = [False, False]
 
     stop_button = InlineKeyboardMarkup().add(InlineKeyboardButton(text="Close message", callback_data="close"))
-    # Check if the files are non-empty before sending
+
     if os.path.getsize(users_file_path) > 0:
         await callback_query.message.reply_document(
             document=types.InputFile(users_file_path),
@@ -1450,7 +1462,7 @@ async def send_files(callback_query: types.CallbackQuery):
         empty[1] = True
         
     if empty[0] or empty[1]:
-        text = "The lists are empty: " + ', '.join[users_file_path if empty[0] else "" + chats_file_path if empty[1] else ""]
+        text = "The lists are empty: " + ', '.join([users_file_path if empty[0] else "", chats_file_path if empty[1] else ""])
         ERR = await send_error_message(chat.id, text)
         cache['error'] = ERR.message_id
 
@@ -1458,6 +1470,7 @@ async def send_files(callback_query: types.CallbackQuery):
         delete_file(users_file_path),
         delete_file(chats_file_path)
     )
+
 
 
 
