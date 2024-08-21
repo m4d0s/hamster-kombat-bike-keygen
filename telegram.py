@@ -19,7 +19,7 @@ from aiogram.utils.exceptions import (MessageNotModified, MessageToDeleteNotFoun
                                       BotBlocked, MessageIsTooLong, MessageToEditNotFound, MessageCantBeDeleted,
                                       BadRequest, MessageCantBeEdited, UserDeactivated)
 
-from solo import mining
+# from solo import mining
 from generate import generate_loading_bar, get_key, logger, delay
 from database import (insert_key_generation, get_last_user_key, get_all_user_ids, now, get_promotions, update_proxy_work,
                       get_unused_key_of_type, relative_time, get_all_user_keys_24h, insert_user, format_remaining_time, 
@@ -1495,27 +1495,17 @@ async def on_startup(dp):
     await update_report(db_config['DEV_ID'], text, stop_button, users_id, True)
     logger.info('Sucessfull report! Bot pooling now...')
 
-def start_background_task(loop):
-    # Функция для запуска фоновой задачи
-    asyncio.run_coroutine_threadsafe(mining(), loop)
 
-async def main():
-  # Получаем текущий цикл событий
-    loop = asyncio.new_event_loop()
 
-    # Запускаем асинхронную функцию mining в фоновом потоке
-    with ThreadPoolExecutor() as exec: 
-        exec.submit(start_background_task(loop))
-
-        try:
-            logger.info("Telegram bot started...")
-            await on_startup(dp)
-            await dp.start_polling()
-        except Exception as e:
-            error_text = " ".join(e.args) if e.args and len(e.args) != 0 else e.match if e.match else str(e)
-            logger.error(f'Error: {error_text}, retry in 30 seconds...')
-            await asyncio.sleep(30)
-            await main()  # Рекурсивный вызов для повторного старта
 
 if __name__ == '__main__':
-    asyncio.run(main())
+    # Запуск бота и ожидание завершения его работы
+    # asyncio.get_event_loop().set_debug(True)
+    while True:
+        try:
+            logger.info("Telegram bot started...")
+            executor.start_polling(dp, skip_updates=True, on_startup=on_startup)
+        except Exception as e:
+            error_text = " ".join(e.args) if e.args and len(e.args)!=0 else e.match if e.match else str(e)
+            logger.error(f'Error: {error_text}, retry in 30 seconds...')
+            time.sleep(30)
