@@ -231,7 +231,7 @@ async def insert_task(task: dict, check: int = 1, task_type: str = 'task', expir
             
             # Insert or update translations
             for lang, translations in task.items():
-                if lang in ['name', 'desc', 'link', 'check_id', 'id', 'control', 'type', 'time', 'expire', 'day']:  # Skip non-translation keys
+                if not isinstance(translations, dict):  # Skip non-translation keys
                     continue
                 
                 for obj, value in translations.items():

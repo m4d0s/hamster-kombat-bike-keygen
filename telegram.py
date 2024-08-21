@@ -1308,12 +1308,14 @@ async def on_startup(dp):
         "en": "Bot now restarted, please generate key again (/start)"
     }
     await update_report(db_config['DEV_ID'], text, stop_button, users_id, True)
+    logger.info('Sucessfull report! Bot pooling now...')
 
 if __name__ == '__main__':
     # Запуск бота и ожидание завершения его работы
     asyncio.get_event_loop().set_debug(True)
     while True:
         try:
+            logger.info("Telegram bot started...")
             executor.start_polling(dp, skip_updates=True, on_startup=on_startup)
         except Exception as e:
             error_text = " ".join(e.args) if e.args and len(e.args)!=0 else e.match if e.match else str(e)
