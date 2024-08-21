@@ -169,6 +169,7 @@ config.json
 references/
 sql/dumps
 #test.py
+go/
 
 #vs
 .vs/

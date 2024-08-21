@@ -5,6 +5,7 @@ import re
 import os
 import random
 import traceback
+import aiofiles
 from io import BytesIO
 from multiprocessing import Process
 from concurrent.futures import ProcessPoolExecutor
@@ -13,12 +14,12 @@ import threading
 import time
 
 from aiogram import Bot, Dispatcher, executor, types
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ParseMode
+from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ParseMode, ChatPermissions, ChatType
 from aiogram.utils.exceptions import (MessageNotModified, MessageToDeleteNotFound, InvalidQueryID, ChatNotFound,
                                       BotBlocked, MessageIsTooLong, MessageToEditNotFound, MessageCantBeDeleted,
                                       BadRequest, MessageCantBeEdited, UserDeactivated)
 
-# from solo import mining
+from solo import mining
 from generate import generate_loading_bar, get_key, logger, delay
 from database import (insert_key_generation, get_last_user_key, get_all_user_ids, now, get_promotions, update_proxy_work,
                       get_unused_key_of_type, relative_time, get_all_user_keys_24h, insert_user, format_remaining_time, 
@@ -182,6 +183,9 @@ def username_valid(username:str) -> bool:
             and 4 <= len(username) <= 32 \
             and not (username[0].isdigit() or username[0] == '_')
 
+@dp.callback_query_handler(lambda c: c.data == 'close')
+async def close(call: types.CallbackQuery):
+    await call.message.delete()
 
 
 #loadbars
@@ -508,6 +512,7 @@ async def process_callback_main_menu(callback_query: types.CallbackQuery) -> Non
     if cache['addtask']:
         await try_to_delete(callback_query.message.chat.id, cache['addtask'])
         cache['addtask'] = None
+    await try_to_delete(callback_query.message.chat.id, callback_query.message.message_id)
     await set_cached_data(callback_query.message.chat.id, cache) ##write
     await send_welcome(callback_query.message)
 
@@ -650,11 +655,14 @@ async def send_welcome(message: types.Message) -> None:
     inline_tasks = InlineKeyboardButton(translate[cache['lang']]['send_welcome'][7], callback_data='generate_tasks')
     inline_report = InlineKeyboardButton(translate[cache['lang']]['send_welcome'][9], callback_data='report')
     inline_kb = InlineKeyboardMarkup().add(inline_btn_generate)
+    debug = InlineKeyboardButton(text=translate[cache['lang']]['send_welcome'][16], callback_data='debug')
     inline_kb.add(other_games)
     inline_kb.add(inline_tasks)
     inline_kb.add(giveaways)
-    if request_level(cache['right'], 1, message.chat.id): # 1 - report
+    if request_level(cache['right'], 3, message.chat.id): # 3 - report
         inline_kb.add(inline_report)
+    if request_level(cache['right'], 9, message.chat.id): # 9 - debug
+        inline_kb.add(debug)
     today_keys = await get_all_user_keys_24h(user_id=message.chat.id, pool=POOL)
     user_limit_keys, global_limit_keys = await get_key_limit(user=message.chat.id)
     cache = await get_cached_data(message.chat.id) ##cache
@@ -957,7 +965,7 @@ async def process_callback_generate_tasks(callback_query: types.CallbackQuery) -
         inline_btn = InlineKeyboardButton(text=mark + all[task]['name'], callback_data=f'generate_task_{task}')
         keyboard.add(inline_btn)
         
-    if request_level(cache['right'], 2, message.chat.id): # 2 - add_task
+    if request_level(cache['right'], 4, message.chat.id): # 4 - add_task
         keyboard.add(InlineKeyboardButton(text=translate[cache['lang']]['process_callback_generate_tasks'][5], callback_data='delete_task'),
                      InlineKeyboardButton(text=translate[cache['lang']]['process_callback_generate_tasks'][4], callback_data='add_task'))
     else:
@@ -988,21 +996,37 @@ async def generate_task_message(callback_query: types.CallbackQuery) -> None:
     
     # Проверяем членство пользователя в чате
     try:
-        checker = await bot.get_chat_member(chat_id=current_task['check_id'], user_id=user_id)
-        is_task_completed = checker and checker.status != 'left' and current_task['control'] == 1
-    except (ChatNotFound, BadRequest):
-        current_task['control'] = 0
-        error_key = 6 if isinstance(ChatNotFound, Exception) else 7
-        await send_error_message(
-            message.chat.id, 
-            translate[cache['lang']]['generate_task_message'][error_key]
-            .replace('{num}', str(current_task['check_id']))
-            .replace('{task}', current_task['name']), 
-            only_dev=True
-        )
-        await delete_task_by_id(int(task_id), pool=POOL) if isinstance(ChatNotFound, Exception) \
-            else await insert_task(current_task, check=0, pool=POOL)
-        is_task_completed = False
+        if current_task['control'] == 1:
+            checker = await bot.get_chat_member(chat_id=current_task['check_id'], user_id=user_id)
+            is_task_completed = checker and checker.status != 'left'
+    except (ChatNotFound):
+        if current_task['control'] != 0:
+            current_task['control'] = 0
+            error_key = 7 
+            await send_error_message(
+                message.chat.id, 
+                translate[cache['lang']]['generate_task_message'][error_key]
+                .replace('{num}', str(current_task['check_id']))
+                .replace('{task}', current_task['name']), 
+                only_dev=True
+            )
+            await delete_task_by_id(int(current_task['id']), pool=POOL)
+            is_task_completed = False
+    except (BadRequest):
+        if current_task['control'] != 0:
+            current_task['control'] = 0
+            error_key = 6 
+            await send_error_message(
+                message.chat.id, 
+                translate[cache['lang']]['generate_task_message'][error_key]
+                .replace('{num}', str(current_task['check_id']))
+                .replace('{task}', current_task['name']), 
+                only_dev=True
+            )
+            await insert_task(current_task, check=0, pool=POOL)
+            is_task_completed = False
+    except (Exception) as e:
+        await send_error_message(message.chat.id, 'Error occured: ' + str(e), only_dev=True)
 
     # Проверяем выполненные задания
     promo_ids = await get_checker_by_user_id(user_id=user_id)
@@ -1089,7 +1113,7 @@ async def check_task_message(callback_query: types.CallbackQuery) -> None:
 @dp.callback_query_handler(lambda c: c.data == 'add_task')
 async def add_task_message(callback_query: types.CallbackQuery) -> None:
     cache = await get_cached_data(callback_query.from_user.id) ##cache
-    if not request_level(cache['right'], 2, callback_query.from_user.id): # 2 - add_task
+    if not request_level(cache['right'], 4, callback_query.from_user.id): # 4 - add_task
         text = snippet['bold'].format(text=translate[cache['lang']]['add_task_message'][0])
         channel = await bot.get_chat(chat_id=db_config["MAIN_CHANNEL"])
         key = InlineKeyboardMarkup().add(InlineKeyboardButton(translate[cache['lang']]['add_task_message'][1], url=await channel.get_url()))
@@ -1118,7 +1142,7 @@ async def send_task_example(message: types.Message) -> None:
                           snippet['code-block'].format(text=translate[cache['lang']]['send_task_example'][1], lang=cache['lang']),
                           snippet['italic'].format(text=translate[cache['lang']]['send_task_example'][2])]) + "\n\n" +\
                             translate[cache['lang']]['send_task_example'][6] + "\n"+\
-                            snippet['block'].format(text=translate[cache['lang']]['send_task_example'][7].replace("{bot}", BOT_INFO.username))
+                            snippet['bold'].format(text=translate[cache['lang']]['send_task_example'][7].replace("{bot}", BOT_INFO.username))
                             
         if cache['addtask']:
             await try_to_delete(chat_id=message.chat.id, message_id=cache['addtask'])
@@ -1132,7 +1156,7 @@ async def reply_to_task(message: types.Message) -> None:
     cache = await get_cached_data(message.chat.id)
     
     if message.reply_to_message.message_id != cache['addtask'] or not cache['process'] \
-        or not request_level(cache['right'], 2, message.chat.id): # 2 - add_task
+        or not request_level(cache['right'], 4, message.chat.id): # 4 - add_task
         return
     control = 1
     transl_task = re.findall(r'<pre>```(\w+)\n(.*?)\n```<\/pre>|<pre><code class="language-(\w+)">(.*?)<\/code><\/pre>', message.html_text, re.DOTALL)
@@ -1214,7 +1238,7 @@ async def delete_task_message(message: types.Message) -> None:
     if not cache['process']:
         return
     
-    if not request_level(cache['right'], 3, message.chat.id): # 3 - delete_task
+    if not request_level(cache['right'], 5, message.chat.id): # 5 - delete_task
         return
     
     text = translate[cache['lang']]['delete_task'][0]
@@ -1235,7 +1259,7 @@ async def process_callback_delete_task(callback_query: types.CallbackQuery) -> N
     if not cache['process']:
         return
     
-    if not request_level(cache['right'], 3, callback_query.message.chat.id): # 3 - delete_task
+    if not request_level(cache['right'], 5, callback_query.message.chat.id): # 5 - delete_task
         return
     
     task_id = callback_query.data.split('_')[2]
@@ -1280,6 +1304,167 @@ async def process_callback_other_games(callback_query: types.CallbackQuery) -> N
 
 
 
+#debug
+async def get_chat_members(chat_id):
+    members = []
+    try:
+        async for member in bot.iter_chat_members(chat_id):
+            member_info = f"ID: {member.user.id}, Name: {member.user.full_name}, Mention: {member.user.mention}"
+            members.append(member_info)
+    except Exception as e:
+        logger.error(e)
+    return members
+
+async def get_user_info(user_id):
+    try:
+        chat_member = await bot.get_chat_member(user_id, user_id)
+        user = chat_member.user
+        return f"ID: {user.id}, Name: {user.first_name} {user.last_name}, Mention: {user.mention}"
+    except Exception as e:
+        logger.error(e)
+        return f"ID: {user_id}, (Undefined for some reason: {e})"
+
+async def get_chat_permissions(chat):
+    try:
+        if not chat.permissions:
+            return {}
+
+        permissions = dict(chat.permissions)
+        return {k.split('can_')[1].replace('_', ' ').capitalize() : v for k,v in permissions.items()}
+
+    except Exception as e:
+        logger.error(f"Error getting chat permissions: {e}")
+        return {}
+
+
+async def get_chat_info(id):
+    try:
+        chat = await bot.get_chat(id)
+        bot_member = await bot.get_chat_member(chat.id, bot.id)
+        invite_link = chat.invite_link or await bot.export_chat_invite_link(chat.id)
+        permissions = await get_chat_permissions(chat)
+
+        chat_info = (
+            f"Name: {chat.title} ({chat.id}), Type: {chat.type}\n"
+            f"\tChat rights: {bot_member.status}\n"
+            f"\tPublic Link: https://t.me/{chat.username}\n"
+            f"\tInvite Link: {invite_link}\n"
+            f"\tPermissions:\n" +
+            "".join(f"\t\t{perm}: {value}\n" for perm, value in permissions.items())
+        )
+        return chat_info + "\n"
+    except Exception as e:
+        logger.error(e)
+        chat_info = f"Name: {chat.title} ({chat.id}), Type: (Undefined for some reason: {e})\n\n"
+        return chat_info
+
+async def save_to_file(file_path, content):
+    async with aiofiles.open(file_path, "w") as file:
+        await file.write(content)
+
+async def delete_file(file_path):
+    try:
+        os.remove(file_path)
+    except FileNotFoundError:
+        pass
+
+@dp.callback_query_handler(lambda c: c.data == 'debug')
+async def send_files(callback_query: types.CallbackQuery):
+    chat = callback_query.message.chat
+    cache = await get_cached_data(chat.id)
+    if not cache['process']:
+        return
+    cache['process'] = False
+    if not request_level(cache['right'], 9, chat.id):  # 9 - debug level
+        return
+    
+    if cache['loading']:
+        await try_to_delete(chat_id=chat.id, message_id=cache['loading'])
+    
+    loading_message = await new_message("Starting debug", chat.id)
+    cache['loading'] = loading_message.message_id
+    await set_cached_data(chat.id, cache)
+
+    stop_button = InlineKeyboardMarkup().add(InlineKeyboardButton(text="🛑 Stop process", callback_data="stop_process"))
+
+    users = await get_all_user_ids(pool=POOL)
+    promo = await get_promotions(pool=POOL)
+    chat_ids = set(promo[x]['check_id'] for x in promo) | set(promo[x].get('chat_id') for x in promo if 'chat_id' in x and promo[x].get('chat_id'))
+
+    user_tasks = [asyncio.create_task(get_user_info(user)) for user in users]
+    chat_tasks = [asyncio.create_task(get_chat_info(chat_id)) for chat_id in chat_ids]
+
+    while any(not task.done() for task in user_tasks + chat_tasks):
+        cache = await get_cached_data(chat.id)
+        if cache['process']:
+            for task in user_tasks + chat_tasks:
+                task.cancel()
+            break
+        loading_text = (
+            f"M: {generate_loading_bar(sum(task.done() for task in user_tasks), 15, len(user_tasks))}\n"
+            f"C: {generate_loading_bar(sum(task.done() for task in chat_tasks), 15, len(chat_tasks))}"
+        )
+        await try_to_edit(text=loading_text, chat_id=chat.id, message_id=cache['loading'], keyboard=stop_button)
+        await asyncio.sleep(2)
+    
+    if cache['process']:
+        return
+        
+    cache['process'] = True
+        
+    await try_to_delete(chat_id=chat.id, message_id=cache['loading'])
+
+    cache['loading'] = None
+
+    members_list = "\n".join(task.result() for task in user_tasks if task.result())
+    chats_list = "\n".join(task.result() for task in chat_tasks if task.result())
+
+    users_file_path = "logs/users_list.txt"
+    chats_file_path = "logs/chats_list.txt"
+    
+    await asyncio.gather(
+        save_to_file(users_file_path, members_list),
+        save_to_file(chats_file_path, chats_list)
+    )
+    
+    empty = [False, False]
+
+    stop_button = InlineKeyboardMarkup().add(InlineKeyboardButton(text="Close message", callback_data="close"))
+    # Check if the files are non-empty before sending
+    if os.path.getsize(users_file_path) > 0:
+        await callback_query.message.reply_document(
+            document=types.InputFile(users_file_path),
+            caption="List of users",
+            reply_markup=stop_button
+        )
+    else:
+        empty[0] = True
+
+    if os.path.getsize(chats_file_path) > 0:
+        await callback_query.message.reply_document(
+            document=types.InputFile(chats_file_path),
+            caption="List of chats",
+            reply_markup=stop_button
+        )
+    else:
+        empty[1] = True
+        
+    if empty[0] or empty[1]:
+        text = "The lists are empty: " + ', '.join[users_file_path if empty[0] else "" + chats_file_path if empty[1] else ""]
+        ERR = await send_error_message(chat.id, text)
+        cache['error'] = ERR.message_id
+
+    await asyncio.gather(
+        delete_file(users_file_path),
+        delete_file(chats_file_path)
+    )
+
+
+
+
+
+
+
 async def on_startup(dp):
     global POOL, BOT_INFO
     POOL = await get_pool()  # Создание пула
@@ -1302,7 +1487,7 @@ async def on_startup(dp):
     #     asyncio.create_task(mining(POOL))
 
     # Подготовка сообщения для разработчика
-    stop_button = InlineKeyboardMarkup().add(InlineKeyboardButton(text="Main menu", callback_data="main_menu"))
+    stop_button = InlineKeyboardMarkup().add(InlineKeyboardButton(text="Main menu", callback_data="close"))
     text = {
         "ru": "Бот перезапущен, пожалуйста, сгенеруйте ключ заново (/start)", 
         "en": "Bot now restarted, please generate key again (/start)"
@@ -1310,14 +1495,27 @@ async def on_startup(dp):
     await update_report(db_config['DEV_ID'], text, stop_button, users_id, True)
     logger.info('Sucessfull report! Bot pooling now...')
 
-if __name__ == '__main__':
-    # Запуск бота и ожидание завершения его работы
-    asyncio.get_event_loop().set_debug(True)
-    while True:
+def start_background_task(loop):
+    # Функция для запуска фоновой задачи
+    asyncio.run_coroutine_threadsafe(mining(), loop)
+
+async def main():
+  # Получаем текущий цикл событий
+    loop = asyncio.new_event_loop()
+
+    # Запускаем асинхронную функцию mining в фоновом потоке
+    with ThreadPoolExecutor() as exec: 
+        exec.submit(start_background_task(loop))
+
         try:
             logger.info("Telegram bot started...")
-            executor.start_polling(dp, skip_updates=True, on_startup=on_startup)
+            await on_startup(dp)
+            await dp.start_polling()
         except Exception as e:
-            error_text = " ".join(e.args) if e.args and len(e.args)!=0 else e.match if e.match else str(e)
+            error_text = " ".join(e.args) if e.args and len(e.args) != 0 else e.match if e.match else str(e)
             logger.error(f'Error: {error_text}, retry in 30 seconds...')
-            time.sleep(30)
+            await asyncio.sleep(30)
+            await main()  # Рекурсивный вызов для повторного старта
+
+if __name__ == '__main__':
+    asyncio.run(main())

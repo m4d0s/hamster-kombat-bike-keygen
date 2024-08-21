@@ -13,6 +13,10 @@ SCHEMAS = config['SCHEMAS']
 POOL = None
 MINING_POOL = None
 
+async def check_db_connection(pool):
+    async with pool.acquire() as conn:
+       return True if await conn.fetchval('SELECT 1') else False
+
 #base
 async def get_pool(mining=False) -> asyncpg.Pool:
     global POOL, MINING_POOL
@@ -24,6 +28,9 @@ async def get_pool(mining=False) -> asyncpg.Pool:
         if MINING_POOL is None:
             MINING_POOL = await asyncpg.create_pool(dsn=config['DB'])
         return MINING_POOL
+
+
+
 
 #config
 async def get_config(pool=POOL):
@@ -102,23 +109,24 @@ async def set_proxy(proxies:dict, pool=POOL):
 async def get_free_proxy(pool=POOL):
     if pool is None:
         pool = await get_pool()  # Получаем пул соединений, если он не был передан
-    
+
     async with pool.acquire() as conn:
         async with conn.transaction():
             proxy = await conn.fetchrow(f'''
                 SELECT link, work FROM "{SCHEMAS["CONFIG"]}".proxy
                 WHERE work = false LIMIT 1
             ''')
-            
+
             if not proxy:
                 proxy = await conn.fetchrow(f'''
                     SELECT link, work FROM "{SCHEMAS["CONFIG"]}".proxy
                     ORDER BY RANDOM() LIMIT 1
                 ''')
-                
-            await set_proxy({proxy['link']: True}, pool=pool)
-    
-    return {'link':proxy['link'], 'work': proxy['work']} if proxy else None
+
+            if proxy:
+                await set_proxy({proxy['link']: True}, pool=pool)
+
+    return {'link': proxy['link'], 'work': proxy['work']} if proxy else None
 
 
 
@@ -264,7 +272,6 @@ async def insert_task(task: dict, check: int = 1, task_type: str = 'task', expir
                         )
     
     return task_id
-
 
 async def delete_task_by_id(id:int, pool=POOL) -> None:
     if id is None:

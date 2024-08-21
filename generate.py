@@ -17,6 +17,7 @@ users = [x for x in config['EVENTS']]
 
 def get_logger(file_level=logging.DEBUG, console_level=logging.DEBUG, base_level=logging.DEBUG):
     # Создаем логгер
+    asyncio.get_event_loop().set_debug(config['DEBUG_LOG'])
     logger = logging.getLogger("logger")
     logger.setLevel(base_level)  # Устанавливаем базовый уровень логирования
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -106,8 +107,11 @@ async def get_key(session, game_key, pool=None):
         await delay(randint(config['DEBUG_DELAY'] // 2, config['DEBUG_DELAY']), "Debug key delay")
         game_key = 'C0D3'
         return config['DEBUG_KEY'] + "-" + "".join([random.choice("0123456789ABCDE") for _ in range(16)])
-       
-    proxy = await get_free_proxy(pool)    
+    
+    logger.debug(f'Fetching {game_key}...')
+    proxy = await get_free_proxy(pool)
+    logger.debug(f'Using proxy: {proxy["link"].split("@")[1]} ({proxy["link"].split(":")[0].upper()})')
+        
     try:
         game_config = config['EVENTS'][game_key]
         delay_ms = randint(config['EVENTS'][game_key]['EVENTS_DELAY'][0], config['EVENTS'][game_key]['EVENTS_DELAY'][1])
