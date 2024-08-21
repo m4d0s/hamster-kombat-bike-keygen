@@ -1355,7 +1355,7 @@ async def get_chat_info(id):
         return chat_info + "\n"
     except Exception as e:
         logger.error(e)
-        chat_info = f"Name: {chat.title} ({chat.id}), Type: (Undefined for some reason: {e})\n\n"
+        chat_info = f"Name: --- ({id}), Type: (Undefined for some reason: {e})\n\n"
         return chat_info
 
 async def save_to_file(file_path, content):
