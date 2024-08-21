@@ -433,9 +433,6 @@ async def try_to_edit(text:str, chat_id:int, message_id:int, keyboard: InlineKey
 async def send_error_message(chat_id:int, message:str, e:Exception = None, only_dev:bool = False) -> types.Message:
     cache = await get_cached_data(chat_id) ##cache
     keyboard = InlineKeyboardMarkup().add(InlineKeyboardButton(translate[cache['lang']]['send_error_message'][0], callback_data='main_menu'))
-    if only_dev:
-        ERROR_MESS = await send_error_message(text=message, chat_id=db_config['DEV_ID'], only_dev=True)
-        return ERROR_MESS
     
     cache['process'] = True
     if cache['error']:
@@ -443,7 +440,10 @@ async def send_error_message(chat_id:int, message:str, e:Exception = None, only_
     if e is not None:
         err_t = f'Error: {e}' if str(e) else ''
         logger.error(traceback.format_stack()[-2].split('\n')[0].strip() + f'\t{err_t}')
-    ERROR_MESS = await new_message(text=message, chat_id=chat_id, keyboard=keyboard)
+    if only_dev:
+        ERROR_MESS = await new_message(text=message, chat_id=db_config['DEV_ID'], keyboard=keyboard)
+    else:
+        ERROR_MESS = await new_message(text=message, chat_id=chat_id, keyboard=keyboard)
     cache['error'] = ERROR_MESS.message_id
     await set_cached_data(chat_id, cache) ##write
     return ERROR_MESS
@@ -902,7 +902,7 @@ async def check_completed_tasks(user_id:int):
             except BadRequest as e:
                 if e.args[0] == 'Member list is inaccessible':
                     logger.warning(f"Error with task \"{promos[promo]['name']}\" ({promos[promo]['check_id']}): {e.args[0]}, task check removed")
-                    await send_error_message(user_id, f"Error with task \"{promos[promo]['name']}\" ({promos[promo]['check_id']})", only_dev=True)
+                    await send_error_message(chat_id=user_id, message=f"Error with task \"{promos[promo]['name']}\" ({promos[promo]['check_id']})", only_dev=True)
                     await insert_task(promos[promo], 0)
                 else:
                     logger.warning(f"Error with task \"{promos[promo]['name']}\" ({promos[promo]['check_id']}) not found")
@@ -1312,4 +1312,10 @@ async def on_startup(dp):
 if __name__ == '__main__':
     # Запуск бота и ожидание завершения его работы
     asyncio.get_event_loop().set_debug(True)
-    executor.start_polling(dp, skip_updates=True, on_startup=on_startup)
+    while True:
+        try:
+            executor.start_polling(dp, skip_updates=True, on_startup=on_startup)
+        except Exception as e:
+            error_text = " ".join(e.args) if e.args and len(e.args)!=0 else e.match if e.match else str(e)
+            logger.error(f'Error: {error_text}, retry in 30 seconds...')
+            time.sleep(30)

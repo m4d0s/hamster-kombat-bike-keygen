@@ -18,7 +18,7 @@ async def get_pool(mining=False) -> asyncpg.Pool:
     global POOL, MINING_POOL
     if not mining:
         if POOL is None:
-            POOL = await asyncpg.create_pool(dsn=config['DB'])
+            POOL = await asyncpg.create_pool(dsn=config['DB'], )
         return POOL
     else:
         if MINING_POOL is None:

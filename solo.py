@@ -19,7 +19,7 @@ with open('config.json') as f:
 async def new_key(session: aiohttp.ClientSession, game: str, pool: asyncpg.Pool, logger: logging.Logger) -> None:
     logger.info(f"Generating new key for {game}")
     try:
-        key = await get_key(session, game)
+        key = await get_key(session, game, pool)
         if key:
             logger.info(f"Key for game {game} generated: {key}")
             await insert_key_generation(0, key, game, used=False, pool=pool)
@@ -30,11 +30,12 @@ async def new_key(session: aiohttp.ClientSession, game: str, pool: asyncpg.Pool,
         logger.error(f"Error generating key for {game}: {e}")
 
 async def main() -> None:
+    pool = await get_pool(True)
     events = [x for x in config['EVENTS']]
-    proxy = await get_proxies()
+    proxy = await get_proxies(pool)
     limit = min(int(len(proxy)*0.8+1), config['GEN_PROXY'])
     logger = get_logger()
-    pool = await get_pool()
+    
 
     async with aiohttp.ClientSession() as session:
         i = 0

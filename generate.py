@@ -100,14 +100,14 @@ async def fetch_api(session: aiohttp.ClientSession, path: str, body: dict, auth:
         error_text = " ".join(e.args) if e.args and len(e.args)!=0 else e.match if e.match else str(e)
         logger.error(f'Error fetch_api: {error_text}')
 
-async def get_key(session, game_key):
+async def get_key(session, game_key, pool=None):
     
     if config['DEBUG']:
         await delay(randint(config['DEBUG_DELAY'] // 2, config['DEBUG_DELAY']), "Debug key delay")
         game_key = 'C0D3'
         return config['DEBUG_KEY'] + "-" + "".join([random.choice("0123456789ABCDE") for _ in range(16)])
        
-    proxy = await get_free_proxy()    
+    proxy = await get_free_proxy(pool)    
     try:
         game_config = config['EVENTS'][game_key]
         delay_ms = randint(config['EVENTS'][game_key]['EVENTS_DELAY'][0], config['EVENTS'][game_key]['EVENTS_DELAY'][1])
@@ -155,6 +155,6 @@ async def get_key(session, game_key):
     except Exception as e:
         logger.error(f'Error get_key: {e}')
     finally:
-        await set_proxy({proxy['link']: False})
+        await set_proxy({proxy['link']: False}, pool=pool)
 
     return promo_code

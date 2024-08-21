@@ -6,7 +6,7 @@
     "COUNT": 0,
     "DELAY": 30,
     "MAX_RETRY": 10,
-    "MINING": false,
+    "MINING": true,
     "DB": "postgresql://postgres:password@127.0.0.1:5432/postgres",
     "DEBUG": false,
     "DEBUG_LOG": true,
@@ -75,6 +75,16 @@
             "NAME": "Twerk Race",
             "APP_TOKEN": "61308365-9d16-4040-8bb0-2f4a4c69074c",
             "PROMO_ID": "61308365-9d16-4040-8bb0-2f4a4c69074c",
+            "EVENTS_DELAY": [
+                20000,
+                25000
+            ],
+            "DISABLED": false
+        },
+        "POLY": {
+            "NAME": "Polysphere",
+            "APP_TOKEN": "2aaf5aee-2cbc-47ec-8a3f-0962cc14bc71",
+            "PROMO_ID": "2aaf5aee-2cbc-47ec-8a3f-0962cc14bc71",
             "EVENTS_DELAY": [
                 20000,
                 25000
