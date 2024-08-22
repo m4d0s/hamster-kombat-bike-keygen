@@ -8,6 +8,7 @@
     "MAX_RETRY": 10,
     "MINING": true,
     "DB": "postgresql://postgres:password@127.0.0.1:5432/postgres",
+    "MINING_DB": "postgresql://postgres:password@127.0.0.1:5432/postgres",
     "DEBUG": false,
     "DEBUG_LOG": true,
     "DEBUG_DELAY": 10000,

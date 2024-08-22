@@ -63,7 +63,7 @@ async def reload_config(config_path='config.json', pool=POOL):
     }
     
     dont_touch = ["EVENTS", "SCHEMAS", "DEBUG_DELAY", "DEBUG_KEY", "DEBUG", "DB", "DEBUG_GAME",
-                  "GEN_PROXY", "MAX_RETRY", "DELAY", "DEBUG_LOG", "MINING"]
+                  "GEN_PROXY", "MAX_RETRY", "DELAY", "DEBUG_LOG", "MINING", "MINING_DB"]
     need_to = ["DEV_ID", "API_TOKEN", "COUNT", "MAIN_GROUP", "MAIN_CHANNEL", "PROXY"]
     
     # Инициализация итогового конфига
