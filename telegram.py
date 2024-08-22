@@ -1000,14 +1000,13 @@ async def generate_task_message(callback_query: types.CallbackQuery) -> None:
             checker = await bot.get_chat_member(chat_id=current_task['check_id'], user_id=user_id)
             is_task_completed = checker and checker.status != 'left'
     except (ChatNotFound):
-        if current_task['control'] != 0:
-            current_task['control'] = 0
+        if current_task['control'] != 0 and 't.me' in current_task['link']:
             error_key = 7 
             await send_error_message(
                 message.chat.id, 
-                translate[cache['lang']]['generate_task_message'][error_key]
-                .replace('{num}', str(current_task['check_id']))
-                .replace('{task}', current_task['name']), 
+                translate[cache['lang']]['generate_task_message'][error_key]\
+                .format(num=str(current_task['check_id']), task=current_task['name'],
+                        link=current_task['link'], id=str(current_task['id'])),
                 only_dev=True
             )
             await delete_task_by_id(int(current_task['id']), pool=POOL)
@@ -1019,8 +1018,8 @@ async def generate_task_message(callback_query: types.CallbackQuery) -> None:
             await send_error_message(
                 message.chat.id, 
                 translate[cache['lang']]['generate_task_message'][error_key]
-                .replace('{num}', str(current_task['check_id']))
-                .replace('{task}', current_task['name']), 
+                .format(num=str(current_task['check_id']), task=current_task['name'],
+                        link=current_task['link'], id=str(current_task['id'])),
                 only_dev=True
             )
             await insert_task(current_task, check=0, pool=POOL)
@@ -1335,7 +1334,6 @@ async def get_chat_permissions(chat):
     except Exception as e:
         logger.error(f"Error getting chat permissions: {e}")
         return {}
-
 
 async def get_chat_info(id):
     try:
