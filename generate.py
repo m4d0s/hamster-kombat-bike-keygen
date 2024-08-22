@@ -15,7 +15,7 @@ PROXY_LIST = [{'link': x['link'], 'work': x['work']} for x in PROXY_LIST]  # Loa
 farmed_keys, attempts = 0, {}
 users = [x for x in config['EVENTS']]
 
-def get_logger(file_level=logging.DEBUG, console_level=logging.DEBUG, base_level=logging.DEBUG):
+def get_logger(file_level=logging.INFO, base_level=logging.INFO):
     # Создаем логгер
     # asyncio.get_event_loop().set_debug(config['DEBUG_LOG'])
     logger = logging.getLogger("logger")

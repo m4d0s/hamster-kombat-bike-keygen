@@ -31,7 +31,7 @@ def generate_loading_bar(progress=0, length=15, max=100) -> str:
     text =  '[' + '▊' * done + '▁' * left + ']' + f' {percentage:.2f}%'
     return text
 
-def get_logger(file_level=logging.DEBUG, console_level=logging.DEBUG, base_level=logging.DEBUG, log=True):
+def get_logger(file_level=logging.INFO, base_level=logging.INFO, log=True):
     # Создаем логгер
     # asyncio.get_event_loop().set_debug(config['DEBUG_LOG'])
     logger = logging.getLogger("logger")
@@ -85,7 +85,7 @@ async def get_pool() -> asyncpg.Pool:
 
 
 async def new_key(session, game, pool):
-    logging.info(f"Generating new key for {game}")
+    logging.info(f"Generating new key for {game}...")
     try:
         key = await get_key(session, game)
         if key:
@@ -273,7 +273,7 @@ async def insert_key_generation(user_id:int, key:str, key_type:str, used=True, p
 logger = get_logger()
 
 async def main():
-    global MINING_POOL
+    global MINING_POOL, logger
     config = await load_config('config.json')
     events = [x for x in config['EVENTS']]
     limit = config['GEN_PROXY']
