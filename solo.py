@@ -31,7 +31,7 @@ def generate_loading_bar(progress=0, length=15, max=100) -> str:
     text =  '[' + '▊' * done + '▁' * left + ']' + f' {percentage:.2f}%'
     return text
 
-def get_logger(file_level=logging.DEBUG, console_level=logging.DEBUG, base_level=logging.DEBUG):
+def get_logger(file_level=logging.DEBUG, console_level=logging.DEBUG, base_level=logging.DEBUG, log=True):
     # Создаем логгер
     # asyncio.get_event_loop().set_debug(config['DEBUG_LOG'])
     logger = logging.getLogger("logger")
@@ -60,8 +60,9 @@ def get_logger(file_level=logging.DEBUG, console_level=logging.DEBUG, base_level
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
 
-    logger.debug("Logger setup sucessfull!\n\tBase log level: %s, Console log level: %s, File log level: %s", 
-                 base_level, console_lvl, file_level)
+    if log:
+        logger.debug("Logger setup sucessfull!\tBase log level: %s, Console log level: %s, File log level: %s", 
+                    base_level, console_lvl, file_level)
 
     return logger
 
