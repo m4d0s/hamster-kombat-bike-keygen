@@ -112,6 +112,8 @@ async def fetch_api(session: aiohttp.ClientSession, path: str, body: dict, auth:
                 if not res.ok:
                     await delay(config['DELAY'] * 1000, "API error")
                     await set_proxy({proxy['link']: False})
+                    if res.status == 400:
+                        logger.debug(f'Response: {res.status} {res.reason}')
                     raise Exception(f"{res.status} {res.reason}")
 
                 # Парсинг только JSON (экономия трафика)
@@ -125,34 +127,32 @@ async def fetch_api(session: aiohttp.ClientSession, path: str, body: dict, auth:
 
 async def get_key(session, game_key, pool=None):
     
-    if config['DEBUG']:
-        await delay(randint(config['DEBUG_DELAY'] // 2, config['DEBUG_DELAY']), "Debug key delay")
-        game_key = 'C0D3'
-        return config['DEBUG_KEY'] + "-" + "".join([random.choice("0123456789ABCDE") for _ in range(16)])
-    
     logger.debug(f'Fetching {game_key}...')
     proxy = await get_free_proxy(pool)
-    logger.debug(f'Using proxy: {proxy["link"].split("@")[1]} ({proxy["link"].split(":")[0].upper()})')
         
     try:
         game_config = config['EVENTS'][game_key]
-        delay_ms = randint(config['EVENTS'][game_key]['EVENTS_DELAY'][0], config['EVENTS'][game_key]['EVENTS_DELAY'][1])
+        delay_ms = random.randint(config['EVENTS'][game_key]['EVENTS_DELAY'][0], config['EVENTS'][game_key]['EVENTS_DELAY'][1]) if not config['EVENTS'][game_key]['DISABLED'] \
+                    else random.randint(1000, 2000)
+        attempts = config['MAX_RETRY'] if not config['EVENTS'][game_key]['DISABLED'] else config['MAX_RETRY'] * 2
         client_id = str(uuid.uuid4())
 
         body = {
             'appToken': game_config['APP_TOKEN'],
             'clientId': client_id,
-            'clientOrigin': 'ios'
+            'clientOrigin': ['deviceid', 'ios', 'android'].pop(random.randint(0, 2))
         }
         login_client_data = await fetch_api(session, '/promo/login-client', body, proxy=proxy)
         await delay(delay_ms, "Login delay")
-
+        
+        if not login_client_data:
+            raise Exception("Failed to login: no data")
         auth_token = login_client_data['clientToken']
         promo_code = None
 
-        for attempt in range(config['MAX_RETRY']):
+        for attempt in range(attempts):
             # delay(config['DELAY'] * 1000)
-            logger.debug(f"Attempt {attempt + 1} of {config['MAX_RETRY']} for {game_key}...")
+            logger.debug(f"Attempt {attempt + 1} of {attempts} for {game_key}...")
             body = {
                 'promoId': game_config['PROMO_ID'],
                 'eventId': str(uuid.uuid4()),
@@ -160,7 +160,7 @@ async def get_key(session, game_key, pool=None):
             }
             register_event_data = await fetch_api(session, '/promo/register-event', body, auth_token, proxy=proxy)
 
-            if not register_event_data.get('hasCode'):
+            if register_event_data and not register_event_data.get('hasCode'):
                 await delay(delay_ms, "Event delay")
                 continue
 
@@ -169,15 +169,12 @@ async def get_key(session, game_key, pool=None):
             }
             create_code_data = await fetch_api(session, '/promo/create-code', body, auth_token, proxy=proxy)
 
-            promo_code = create_code_data.get('promoCode')
-            if promo_code:
-                break
+            if create_code_data and 'promoCode' in create_code_data:
+                promo_code = create_code_data.get('promoCode')
+                if promo_code:
+                    break
 
             await delay(delay_ms, "Code delay")
-
-        if promo_code is None:
-            logger.error('Failed to generate promo code after maximum retries')
-            return None
     except Exception as e:
         logger.error(f'Error get_key: {e}')
     finally:

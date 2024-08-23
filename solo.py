@@ -93,7 +93,9 @@ async def get_key(session, game_key, pool=MINING_POOL):
         
     try:
         game_config = config['EVENTS'][game_key]
-        delay_ms = random.randint(config['EVENTS'][game_key]['EVENTS_DELAY'][0], config['EVENTS'][game_key]['EVENTS_DELAY'][1])
+        delay_ms = random.randint(config['EVENTS'][game_key]['EVENTS_DELAY'][0], config['EVENTS'][game_key]['EVENTS_DELAY'][1]) if not config['EVENTS'][game_key]['DISABLED'] \
+                    else random.randint(1000, 2000)
+        attempts = config['MAX_RETRY'] if not config['EVENTS'][game_key]['DISABLED'] else config['MAX_RETRY'] * 2
         client_id = str(uuid.uuid4())
 
         body = {
@@ -109,9 +111,9 @@ async def get_key(session, game_key, pool=MINING_POOL):
         auth_token = login_client_data['clientToken']
         promo_code = None
 
-        for attempt in range(config['MAX_RETRY']):
+        for attempt in range(attempts):
             # delay(config['DELAY'] * 1000)
-            logger.debug(f"Attempt {attempt + 1} of {config['MAX_RETRY']} for {game_key}...")
+            logger.debug(f"Attempt {attempt + 1} of {attempts} for {game_key}...")
             body = {
                 'promoId': game_config['PROMO_ID'],
                 'eventId': str(uuid.uuid4()),
@@ -165,6 +167,9 @@ async def fetch_api(session: aiohttp.ClientSession, path: str, body: dict, auth:
 
                 if not res.ok:
                     await delay(config['DELAY'] * 1000, "API error")
+                    await set_proxy({proxy['link']: False})
+                    if res.status == 400:
+                        logger.debug(f'Response: {res.status} {res.reason}')
                     raise Exception(f"{res.status} {res.reason}")
 
                 # Парсинг только JSON (экономия трафика)

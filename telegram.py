@@ -748,7 +748,7 @@ async def process_callback_generate_menu(callback_query: types.CallbackQuery) ->
 
     keyboard = InlineKeyboardMarkup()
     def mark(game):
-        return '✅ ' if not json_config['EVENTS'][game]['DISABLED'] else '❌ '
+        return "" #'✅ ' if not json_config['EVENTS'][game]['DISABLED'] else '❌ '
     # Создаем список кнопок из конфигурации
     buttons = [InlineKeyboardButton(text=mark(type) + json_config['EVENTS'][type]['NAME'], callback_data=f'generate_key_{type}') for type in json_config['EVENTS']]
     
