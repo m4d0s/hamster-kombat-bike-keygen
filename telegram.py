@@ -992,6 +992,7 @@ async def generate_task_message(callback_query: types.CallbackQuery) -> None:
     used, all_tasks = await get_tasks_limit(user=user_id)
     current_task = all_tasks.get(task_id)
     message = callback_query.message
+    is_task_completed = False
 
     if not current_task:
         await send_error_message(message.chat.id, translate[cache['lang']]['generate_task_message'][6], only_dev=True)
