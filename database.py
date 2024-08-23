@@ -323,7 +323,7 @@ async def get_last_user_key(user_id:int , pool=POOL) -> dict:
     async with pool.acquire() as conn:
         async with conn.transaction():
             row = await conn.fetchrow(
-                f'SELECT * FROM "{SCHEMAS["HAMSTER"]}".keys WHERE user_id = $1 ORDER BY time DESC LIMIT 1',
+                f'SELECT * FROM "{SCHEMAS["HAMSTER"]}".keys WHERE user_id = $1 and used = true ORDER BY time DESC LIMIT 1',
                 num
             )
     
