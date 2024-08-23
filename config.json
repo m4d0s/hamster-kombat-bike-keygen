@@ -91,6 +91,26 @@
                 25000
             ],
             "DISABLED": true
+        },
+        "MAT": {
+            "NAME": "Mow and Trim",
+            "APP_TOKEN": "ef319a80-949a-492e-8ee0-424fb5fc20a6",
+            "PROMO_ID": "ef319a80-949a-492e-8ee0-424fb5fc20a6",
+            "EVENTS_DELAY": [
+                20000,
+                25000
+            ],
+            "DISABLED": true
+        },
+        "MUD": {
+            "NAME": "Mud Racing",
+            "APP_TOKEN": "8814a785-97fb-4177-9193-ca4180ff9da8",
+            "PROMO_ID": "8814a785-97fb-4177-9193-ca4180ff9da8",
+            "EVENTS_DELAY": [
+                20000,
+                25000
+            ],
+            "DISABLED": true
         }
     }
 }
