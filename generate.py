@@ -112,9 +112,10 @@ async def fetch_api(session: aiohttp.ClientSession, path: str, body: dict, auth:
                 if not res.ok:
                     await delay(config['DELAY'] * 1000, "API error")
                     await set_proxy({proxy['link']: False})
-                    if res.status == 400:
+                    if str(res.status) == '400':
                         logger.debug(f'Response: {res.status} {res.reason}')
-                    raise Exception(f"{res.status} {res.reason}")
+                    else:
+                        raise Exception(f"{res.status} {res.reason}")
 
                 # Парсинг только JSON (экономия трафика)
                 response_data = await res.json()
