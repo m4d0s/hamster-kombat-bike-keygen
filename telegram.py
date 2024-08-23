@@ -664,7 +664,8 @@ async def send_welcome(message: types.Message) -> None:
         inline_kb.add(inline_report)
     elif request_level(cache['right'], 9, message.chat.id): # 9 - debug
         inline_kb.add(inline_report, debug)
-    inline_kb.add(stop_button)
+    if not cache['process']:
+        inline_kb.add(stop_button)
     today_keys = await get_all_user_keys_24h(user_id=message.chat.id, pool=POOL)
     user_limit_keys, global_limit_keys = await get_key_limit(user=message.chat.id)
     cache = await get_cached_data(message.chat.id) ##cache
