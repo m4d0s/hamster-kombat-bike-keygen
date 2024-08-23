@@ -725,13 +725,15 @@ async def send_welcome(message: types.Message) -> None:
     
     if len(text) < 4096:
         WELCOME_MESS = await new_message(text=text, chat_id=message.chat.id, keyboard=inline_kb, disable_preview=False)
-        cache['welcome'] = WELCOME_MESS.message_id
+        if WELCOME_MESS:
+            cache['welcome'] = WELCOME_MESS.message_id
     else:
         keys = '\n'.join([f'{type}:\t{key}\t({format_remaining_time(key_time, pref=cache["lang"])})' for key, key_time, type in user_limit_keys])
         pseudo_file = create_pseudo_file(keys)
         text = text1 + f" {snippet['italic'].format(text=translate[cache['lang']]['send_welcome'][6])}" + text3
         WELCOME_MESS = await new_message(chat_id=message.chat.id, document=pseudo_file, text=text, keyboard=inline_kb)
-        cache['welcome'] = WELCOME_MESS.message_id
+        if WELCOME_MESS:
+            cache['welcome'] = WELCOME_MESS.message_id
         
     await try_to_delete(chat_id=message.chat.id, message_id=message.message_id)
     await set_cached_data(message.chat.id, cache) ##write
@@ -1032,7 +1034,7 @@ async def generate_task_message(callback_query: types.CallbackQuery) -> None:
         await send_error_message(message.chat.id, 'Error occured: ' + str(e), only_dev=True)
 
     # Проверяем выполненные задания
-    promo_ids = await get_checker_by_user_id(user_id=user_id)
+    promo_ids = await get_checker_by_user_id(user_id=user_id) or []
     is_task_completed = is_task_completed or (int(task_id) in promo_ids and current_task['control'] == 0)
 
     # Формируем текст и кнопки для сообщения
