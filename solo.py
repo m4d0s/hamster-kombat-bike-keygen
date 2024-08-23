@@ -80,7 +80,7 @@ async def new_key(session, game, pool):
         key = await get_key(session, game)
         if key:
             logger.info(f"Key for game {game} generated: {key}")
-            await insert_key_generation(user_id=0, key=key, key_type=game, pool=pool)
+            await insert_key_generation(user_id=config['DEV_ID'], key=key, key_type=game, pool=pool)
         else:
             logger.warning(f"Failed to generate key for game {game}")
     except Exception as e:
@@ -246,17 +246,19 @@ async def insert_key_generation(user_id:int, key:str, key_type:str, used=False, 
     
     num = await get_user_id(user_id, pool)
     if num is None:
+        logger.error(f'Error find user: {user_id}')
         return
     
     async with pool.acquire() as conn:
         async with conn.transaction():
-            await conn.execute(
+            id = await conn.execute(
                 f'INSERT INTO "{SCHEMAS["HAMSTER"]}".keys (user_id, key, time, type, used) ' +
                 'VALUES ($1, $2, $3, $4, $5) ' +
-                'ON CONFLICT (key) DO UPDATE SET used = EXCLUDED.used, user_id = EXCLUDED.user_id, time = EXCLUDED.time',
+                'ON CONFLICT (key) DO UPDATE SET used = EXCLUDED.used, user_id = EXCLUDED.user_id, time = EXCLUDED.time RETURNING id',
                 num, key, now(), key_type, used
             )
-
+            if not id:
+                logger.error(f'Error insert_key_generation: {[num, key, now(), key_type, used]}')
 
 logger = get_logger()
 

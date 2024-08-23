@@ -339,7 +339,7 @@ async def get_unused_key_of_type(key_type:str, pool=POOL, day = 1.0) -> str:
     
     async with pool.acquire() as conn:
         async with conn.transaction():
-            row = await conn.fetchrow(progression_query, key_type, now()  - 86400 * abs(day))
+            row = await conn.fetchrow(progression_query, key_type, now()  - 86400 * day)
     
     return row['key'] if row else None
 
@@ -349,7 +349,7 @@ async def get_all_user_keys_24h(user_id:id, pool=POOL, day=1.0) -> list:
     if pool is None:
         pool = await get_pool()
         
-    progression_query = f'SELECT key, time, type FROM "{SCHEMAS["HAMSTER"]}".keys WHERE user_id = $1 AND time > $2 ORDER BY time DESC'
+    progression_query = f'SELECT key, time, type FROM "{SCHEMAS["HAMSTER"]}".keys WHERE user_id = $1 AND time > $2 and used = true ORDER BY time DESC'
     
     num = await get_user_id(user_id, pool)
     if num is None:
