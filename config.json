@@ -5,12 +5,12 @@
     "MAIN_CHANNEL": 0,
     "COUNT": 0,
     "DELAY": 30,
-    "MAX_RETRY": 10,
+    "MAX_RETRY": 15,
     "MINING": true,
     "DB": "postgresql://postgres:password@127.0.0.1:5432/postgres",
     "MINING_DB": "postgresql://postgres:password@127.0.0.1:5432/postgres",
     "DEBUG": false,
-    "DEBUG_LOG": true,
+    "DEBUG_LOG": false,
     "DEBUG_DELAY": 10000,
     "DEBUG_KEY": "C0D3-TH1S-1S-JU5T-T35T",
     "DEBUG_GAME": "C0D3",
@@ -27,8 +27,8 @@
             "APP_TOKEN": "d28721be-fd2d-4b45-869e-9f253b554e50",
             "PROMO_ID": "43e35910-c168-4634-ad4f-52fd764a843f",
             "EVENTS_DELAY": [
-                20000,
-                25000
+                120000,
+                125000
             ],
             "DISABLED": true
         },
@@ -87,10 +87,10 @@
             "APP_TOKEN": "2aaf5aee-2cbc-47ec-8a3f-0962cc14bc71",
             "PROMO_ID": "2aaf5aee-2cbc-47ec-8a3f-0962cc14bc71",
             "EVENTS_DELAY": [
-                20000,
-                25000
+                120000,
+                125000
             ],
-            "DISABLED": false
+            "DISABLED": true
         }
     }
 }

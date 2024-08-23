@@ -15,6 +15,28 @@ PROXY_LIST = [{'link': x['link'], 'work': x['work']} for x in PROXY_LIST]  # Loa
 farmed_keys, attempts = 0, {}
 users = [x for x in config['EVENTS']]
 
+
+async def check_proxy(proxy: str, test_url: str = 'http://httpbin.org/ip', timeout: int = 10, retries: int = 4) -> bool:
+    proxy_connector = aiohttp.ProxyConnector(proxy=proxy)
+
+    for attempt in range(1, retries + 1):
+        try:
+            async with aiohttp.ClientSession(connector=proxy_connector) as session:
+                async with session.get(test_url, timeout=timeout) as response:
+                    if response.status == 200:
+                        logger.debug(f"Proxy {proxy} work (try {attempt})")
+                        return True
+                    else:
+                        logger.debug(f"Proxy {proxy} not work (try {attempt}), status: {response.status}")
+        except Exception as e:
+            print(f"Error with {proxy} (try {attempt}): {e}")
+        
+        # Ожидание перед следующей попыткой
+        await asyncio.sleep(1)
+
+    print(f"Proxy {proxy} cabt not work after {retries} tries")
+    return False
+
 def get_logger(file_level=logging.INFO, base_level=logging.INFO):
     # Создаем логгер
     # asyncio.get_event_loop().set_debug(config['DEBUG_LOG'])
@@ -98,7 +120,7 @@ async def fetch_api(session: aiohttp.ClientSession, path: str, body: dict, auth:
                 return response_data
             
     except Exception as e:
-        error_text = " ".join(e.args) if e.args and len(e.args)!=0 else e.match if e.match else str(e)
+        error_text =  str(e)
         logger.error(f'Error fetch_api: {error_text}')
 
 async def get_key(session, game_key, pool=None):

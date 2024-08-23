@@ -412,7 +412,7 @@ async def try_to_delete(chat_id:int, message_id:int) -> bool:
     except MessageCantBeDeleted:
         return False
     except Exception as e:
-        error_text = " ".join(e.args) if e.args and len(e.args)!=0 else e.match if e.match else str(e)
+        error_text =  str(e)
         logger.error(f'Error sending message in chat {chat_id}: {error_text}')
         return
     
@@ -430,7 +430,7 @@ async def try_to_edit(text:str, chat_id:int, message_id:int, keyboard: InlineKey
     except MessageCantBeEdited:
         return False
     except Exception as e:
-        error_text = " ".join(e.args) if e.args and len(e.args)!=0 else e.match if e.match else str(e)
+        error_text =  str(e)
         logger.error(f'Error sending message in chat {chat_id}: {error_text}')
         return
     
@@ -475,7 +475,7 @@ async def new_message(text: str, chat_id: int, keyboard: InlineKeyboardMarkup = 
     except ChatNotFound:
         logger.warning("Chat ({user_id}) not found".format(user_id=chat_id))
     except Exception as e:
-        error_text = " ".join(e.args) if e.args and len(e.args)!=0 else e.match if e.match else str(e)
+        error_text =  str(e)
         logger.error(f'Error sending message in chat {chat_id}: {error_text}')
         return
         
@@ -495,7 +495,7 @@ async def send_message_to_user(user_id:int, text: str, keyboard: InlineKeyboardM
         logger.warning(f"{translate[cache['lang']]['send_message_to_user'][1].replace('{user_id}', str(user_id))}")
         await delete_user(user_id, pool=POOL)
     except Exception as e:
-        error_text = " ".join(e.args) if e.args and len(e.args)!=0 else e.match if e.match else str(e)
+        error_text =  str(e)
         logger.error(f'Error sending message in chat {user_id}: {error_text}')
         return
     await set_cached_data(user_id, cache) ##write
@@ -1279,7 +1279,7 @@ async def process_callback_delete_task(callback_query: types.CallbackQuery) -> N
 async def generate_giveaways_menu(callback_query: types.CallbackQuery) -> None:
     cache = await get_cached_data(callback_query.message.chat.id) ##cache
     
-    giveaways = get_promotions(pool=POOL, task_type='giveaway')
+    giveaways = await get_promotions(pool=POOL, task_type='giveaway')
     
     
     await bot.answer_callback_query(callback_query.id, show_alert=True, text=translate[cache['lang']]['generate_giveaways_menu'][0])
@@ -1517,6 +1517,6 @@ if __name__ == '__main__':
             logger.info("Telegram bot started...")
             executor.start_polling(dp, skip_updates=True, on_startup=on_startup)
         except Exception as e:
-            error_text = " ".join(e.args) if e.args and len(e.args)!=0 else e.match if e.match else str(e)
+            error_text =  str(e)
             logger.error(f'Error: {error_text}, retry in 30 seconds...')
             time.sleep(30)

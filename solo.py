@@ -13,7 +13,6 @@ import os
 MINING_POOL = None
 config = json.loads(open('config.json').read())
 SCHEMAS = config['SCHEMAS']
-
 farmed_keys, attempts = 0, {}
 users = [x for x in config['EVENTS']]
 
@@ -22,14 +21,6 @@ def log_timestamp():
 
 def now() -> int:
     return int(datetime.now().timestamp())
-
-def generate_loading_bar(progress=0, length=15, max=100) -> str:
-    done = int(progress / max * length if progress / max * length < length else length)
-    left = length - done
-    percentage = progress / max * 100 if progress / max * 100 < 100 else 100
-    
-    text =  '[' + '▊' * done + '▁' * left + ']' + f' {percentage:.2f}%'
-    return text
 
 def get_logger(file_level=logging.INFO, base_level=logging.INFO, log=True):
     # Создаем логгер
@@ -85,27 +76,20 @@ async def get_pool() -> asyncpg.Pool:
 
 
 async def new_key(session, game, pool):
-    logging.info(f"Generating new key for {game}...")
     try:
         key = await get_key(session, game)
         if key:
-            logging.info(f"Key for game {game} generated: {key}")
+            logger.info(f"Key for game {game} generated: {key}")
+            await insert_key_generation(user_id=0, key=key, key_type=game, pool=pool)
         else:
-            logging.warning(f"Failed to generate key for game {game}")
-        await insert_key_generation(0, key, game, used=False, pool=pool)
+            logger.warning(f"Failed to generate key for game {game}")
     except Exception as e:
-        logging.error(f"Error generating key for {game}: {e}")
+        logger.error(f"Error generating key for {game}: {e}")
 
-async def get_key(session, game_key, pool=None):
-    
-    if config['DEBUG']:
-        await delay(random.randint(config['DEBUG_DELAY'] // 2, config['DEBUG_DELAY']), "Debug key delay")
-        game_key = 'C0D3'
-        return config['DEBUG_KEY'] + "-" + "".join([random.choice("0123456789ABCDE") for _ in range(16)])
+async def get_key(session, game_key, pool=MINING_POOL):
     
     logger.debug(f'Fetching {game_key}...')
     proxy = await get_free_proxy(pool)
-    logger.debug(f'Using proxy: {proxy["link"].split("@")[1]} ({proxy["link"].split(":")[0].upper()})')
         
     try:
         game_config = config['EVENTS'][game_key]
@@ -115,11 +99,13 @@ async def get_key(session, game_key, pool=None):
         body = {
             'appToken': game_config['APP_TOKEN'],
             'clientId': client_id,
-            'clientOrigin': 'ios'
+            'clientOrigin': ['deviceid', 'ios', 'android'].pop(random.randint(0, 2))
         }
         login_client_data = await fetch_api(session, '/promo/login-client', body, proxy=proxy)
         await delay(delay_ms, "Login delay")
-
+        
+        if not login_client_data:
+            raise Exception("Failed to login: no data")
         auth_token = login_client_data['clientToken']
         promo_code = None
 
@@ -133,7 +119,7 @@ async def get_key(session, game_key, pool=None):
             }
             register_event_data = await fetch_api(session, '/promo/register-event', body, auth_token, proxy=proxy)
 
-            if not register_event_data.get('hasCode'):
+            if register_event_data and not register_event_data.get('hasCode'):
                 await delay(delay_ms, "Event delay")
                 continue
 
@@ -142,15 +128,12 @@ async def get_key(session, game_key, pool=None):
             }
             create_code_data = await fetch_api(session, '/promo/create-code', body, auth_token, proxy=proxy)
 
-            promo_code = create_code_data.get('promoCode')
-            if promo_code:
-                break
+            if create_code_data and 'promoCode' in create_code_data:
+                promo_code = create_code_data.get('promoCode')
+                if promo_code:
+                    break
 
             await delay(delay_ms, "Code delay")
-
-        if promo_code is None:
-            logger.error('Failed to generate promo code after maximum retries')
-            return None
     except Exception as e:
         logger.error(f'Error get_key: {e}')
     finally:
@@ -182,7 +165,6 @@ async def fetch_api(session: aiohttp.ClientSession, path: str, body: dict, auth:
 
                 if not res.ok:
                     await delay(config['DELAY'] * 1000, "API error")
-                    await set_proxy({proxy['link']: False})
                     raise Exception(f"{res.status} {res.reason}")
 
                 # Парсинг только JSON (экономия трафика)
@@ -191,7 +173,7 @@ async def fetch_api(session: aiohttp.ClientSession, path: str, body: dict, auth:
                 return response_data
             
     except Exception as e:
-        error_text = " ".join(e.args) if e.args and len(e.args)!=0 else e.match if e.match else str(e)
+        error_text =  str(e)
         logger.error(f'Error fetch_api: {error_text}')
 
 
@@ -202,13 +184,13 @@ async def set_proxy(proxies:dict, pool=MINING_POOL):
 
     async with pool.acquire() as conn:
         async with conn.transaction():
-            for proxy in proxies:
+            for proxy, work in proxies.items():
                 await conn.execute(f'''
                     INSERT INTO "{SCHEMAS["CONFIG"]}".proxy (link, work, time)
                     VALUES ($1, $2, $3)
                     ON CONFLICT (link) DO UPDATE
                     SET work = EXCLUDED.work, time = EXCLUDED.time
-                ''', proxy, proxies[proxy], now())       
+                ''', str(proxy), work, now())       
 
 async def get_free_proxy(pool=MINING_POOL):
     if pool is None:
@@ -250,7 +232,7 @@ async def get_user_id(tg_id:int, pool=MINING_POOL):
                 return None
             return num['id']
 
-async def insert_key_generation(user_id:int, key:str, key_type:str, used=True, pool=MINING_POOL) -> None:
+async def insert_key_generation(user_id:int, key:str, key_type:str, used=False, pool=MINING_POOL) -> None:
     if user_id is None or key is None or key_type is None:
         return
     if pool is None:
@@ -275,7 +257,7 @@ logger = get_logger()
 async def main():
     global MINING_POOL, logger
     config = await load_config('config.json')
-    events = [x for x in config['EVENTS']]
+    events = [x for x in config['EVENTS']] if not config['DEBUG'] else [x for x in config['EVENTS'] if config['EVENTS'][x]['DISABLED']]
     limit = config['GEN_PROXY']
     semaphore = asyncio.Semaphore(limit)
     await get_pool()
@@ -283,10 +265,14 @@ async def main():
     async with aiohttp.ClientSession() as session:
         tasks, i = [], -1
         while True:
-            i+=1; i%=len(events)
+            i+=1; i%=len(events) * (60 // len(events) + 1)
+            tasks = [t for t in tasks if not t.done()]
+            if i == 0:
+                logger.info(f"Generating keys in process: {len(tasks)}")
             async with semaphore:
-                tasks.append(asyncio.create_task(new_key(session, events[i], MINING_POOL)))
-                await asyncio.sleep(2)
+                if len(tasks) < limit:
+                    tasks.append(asyncio.create_task(new_key(session, events[i%len(events)], MINING_POOL)))
+                await delay(1000, "Generating delay")
 
 if __name__ == '__main__':
     asyncio.run(main())
