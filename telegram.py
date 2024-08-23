@@ -656,13 +656,15 @@ async def send_welcome(message: types.Message) -> None:
     inline_report = InlineKeyboardButton(translate[cache['lang']]['send_welcome'][9], callback_data='report')
     inline_kb = InlineKeyboardMarkup().add(inline_btn_generate)
     debug = InlineKeyboardButton(text=translate[cache['lang']]['send_welcome'][16], callback_data='debug')
+    stop_button = InlineKeyboardMarkup().add(InlineKeyboardButton(text=translate[cache['lang']]['update_loadbar'][3], callback_data="stop_process"))
     inline_kb.add(other_games)
     inline_kb.add(inline_tasks)
     inline_kb.add(giveaways)
     if request_level(cache['right'], 3, message.chat.id): # 3 - report
         inline_kb.add(inline_report)
-    if request_level(cache['right'], 9, message.chat.id): # 9 - debug
-        inline_kb.add(debug)
+    elif request_level(cache['right'], 9, message.chat.id): # 9 - debug
+        inline_kb.add(inline_report, debug)
+    inline_kb.add(stop_button)
     today_keys = await get_all_user_keys_24h(user_id=message.chat.id, pool=POOL)
     user_limit_keys, global_limit_keys = await get_key_limit(user=message.chat.id)
     cache = await get_cached_data(message.chat.id) ##cache
