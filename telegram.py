@@ -665,12 +665,14 @@ async def send_welcome(message: types.Message) -> None:
     inline_kb.add(InlineKeyboardButton(translate[cache['lang']]['send_welcome'][7], callback_data='generate_tasks'))
     inline_kb.add(InlineKeyboardButton(text=translate[cache['lang']]['send_welcome'][10], callback_data='giveaways'))
     
-    if request_level(cache['right'], 3, message.chat.id): # 3 - report
+    if request_level(cache['right'], 9, message.chat.id): # 9 - debug
+        inline_kb.add(InlineKeyboardButton(translate[cache['lang']]['send_welcome'][9], callback_data='report'), 
+                      InlineKeyboardButton(text=translate[cache['lang']]['send_welcome'][16], callback_data='debug'))   
+         
+    elif request_level(cache['right'], 3, message.chat.id): # 3 - report
         inline_kb.add(InlineKeyboardButton(translate[cache['lang']]['send_welcome'][9], callback_data='report'))
     
-    elif request_level(cache['right'], 9, message.chat.id): # 9 - debug
-        inline_kb.add(InlineKeyboardButton(translate[cache['lang']]['send_welcome'][9], callback_data='report'), 
-                      InlineKeyboardButton(text=translate[cache['lang']]['send_welcome'][16], callback_data='debug'))
+
         
     if not cache['process']:
         inline_kb.add(InlineKeyboardMarkup()
