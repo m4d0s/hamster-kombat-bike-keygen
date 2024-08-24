@@ -329,38 +329,60 @@ async def get_last_user_key(user_id:int , pool=POOL) -> dict:
     
     return {key: value for key, value in zip(row.keys(), row.values())} if row else None
 
-async def get_unused_key_of_type(key_type:str, pool=POOL, day = 1.0) -> str:
-    if key_type is None:
-        return
+async def get_unused_key_of_type(key_type: str, pool=None, day: float = 1.0):
+    if not key_type:  # Проверяем, что key_type не пустая строка и не None
+        return None
     if pool is None:
         pool = await get_pool()
+    if day <= 0:  # Проверяем, что day больше 0
+        return None
     
-    progression_query = f'SELECT key FROM "{SCHEMAS["HAMSTER"]}".keys WHERE type = $1 AND used = false AND time > $2 ORDER BY time ASC LIMIT 1'
+    regression_query = (
+        f'SELECT key FROM "{SCHEMAS["HAMSTER"]}".keys '
+        'WHERE type = $1 AND used = false '
+        'AND $2 < time AND time < $3 '
+        'ORDER BY time ASC LIMIT 1'
+    )
     
     async with pool.acquire() as conn:
         async with conn.transaction():
-            row = await conn.fetchrow(progression_query, key_type, now()  - 86400 * day)
+            row = await conn.fetchrow(
+                regression_query, 
+                key_type, 
+                get_utc_time(0, delta_days=(-(day - 1))), 
+                get_utc_time(0, delta_days=1)
+            )
     
     return row['key'] if row else None
 
-async def get_all_user_keys_24h(user_id:id, pool=POOL, day=1.0) -> list:
+
+async def get_all_user_keys_24h(user_id: int, pool=None, day: float = 1.0) -> list:
     if user_id is None:
         return []
     if pool is None:
         pool = await get_pool()
-        
-    progression_query = f'SELECT key, time, type FROM "{SCHEMAS["HAMSTER"]}".keys WHERE user_id = $1 AND time > $2 and used = true ORDER BY time DESC'
     
-    num = await get_user_id(user_id, pool)
-    if num is None:
-        return
+    user_id_db = await get_user_id(user_id, pool)
+    if user_id_db is None:
+        return []
+
+    # SQL запрос для получения ключей пользователя за последние 24 часа
+    query = (
+        f'SELECT key, time, type FROM "{SCHEMAS["HAMSTER"]}".keys '
+        'WHERE user_id = $1 AND used = false '
+        'AND $2 < time AND time < $3 '
+        'ORDER BY time ASC'
+    )
     
+    start_time = get_utc_time(0, 0, 0, delta_days=-day)
+    end_time = get_utc_time(0, 0, 0, delta_days=1)
+
     async with pool.acquire() as conn:
         async with conn.transaction():
-            rows = await conn.fetch(progression_query, num, now() - 86400 * abs(day))
-            # rows = await conn.fetch(regression_query, num, get_utc_time(0, 0, 0, True))
+            rows = await conn.fetch(query, user_id_db, start_time, end_time)
     
-    return [[row['key'], row['time'], row['type']] for row in rows] if rows is not None and len(rows) > 0 else []
+    return [[row['key'], row['time'], row['type']] for row in rows] if rows else []
+
 
 
 
@@ -582,20 +604,15 @@ def format_remaining_time(target_time: int, pref='en', reverse=False) -> str:
     else:
         return ' '.join([str(seconds), translate[3], prefix])
 
-def get_utc_time(target_hour: int, target_minute: int, target_second: int = 0, next = True) -> datetime:
+
+def get_utc_time(target_hour: int = 0, target_minute: int = 0, target_second: int = 0, delta_days: float = 0.0) -> int:
     # Текущее время в UTC
     now = datetime.now(timezone.utc)
     
     # Время, заданное пользователем, но для текущего дня
     target_time_today = datetime.combine(now.date(), time(target_hour, target_minute, target_second, tzinfo=timezone.utc))
     
-    # Если целевое время уже прошло сегодня, выбираем следующую дату
-    if now >= target_time_today:
-        if next:
-            target_time_next_day = target_time_today + timedelta(days=1)
-        else:
-            target_time_next_day = target_time_today - timedelta(days=1)
-    else:
-        target_time_next_day = target_time_today
-
-    return int(target_time_next_day.timestamp())
+    # Корректируем целевое время на количество дней
+    target_time = target_time_today + timedelta(days=delta_days)
+    
+    return int(target_time.timestamp())

@@ -441,13 +441,18 @@ async def send_error_message(chat_id:int, message:str, e:Exception = None, only_
     cache['process'] = True
     if cache['error']:
         await try_to_delete(chat_id, cache['error'])
+    if cache['welcome']:
+        await try_to_delete(chat_id, cache['welcome'])
+        cache['welcome'] = None
+        
     if e is not None:
-        err_t = f'Error: {e}' if str(e) else ''
+        err_t = f'Error: {e}' if str(e) else 'Error: No details'
         logger.error(traceback.format_stack()[-2].split('\n')[0].strip() + f'\t{err_t}')
     if only_dev:
         ERROR_MESS = await new_message(text=message, chat_id=db_config['DEV_ID'], keyboard=keyboard)
     else:
         ERROR_MESS = await new_message(text=message, chat_id=chat_id, keyboard=keyboard)
+    
     cache['error'] = ERROR_MESS.message_id
     await set_cached_data(chat_id, cache) ##write
     return ERROR_MESS
@@ -649,23 +654,29 @@ async def report(message: types.Message) -> None:
 # General menus
 async def send_welcome(message: types.Message) -> None:
     cache = await get_cached_data(message.chat.id) ##cache
-    inline_btn_generate = InlineKeyboardButton(translate[cache['lang']]['send_welcome'][0], callback_data='generate_menu')
-    other_games = InlineKeyboardButton(text=translate[cache['lang']]['send_welcome'][15], callback_data='other_games')
-    giveaways = InlineKeyboardButton(text=translate[cache['lang']]['send_welcome'][10], callback_data='giveaways')
-    inline_tasks = InlineKeyboardButton(translate[cache['lang']]['send_welcome'][7], callback_data='generate_tasks')
-    inline_report = InlineKeyboardButton(translate[cache['lang']]['send_welcome'][9], callback_data='report')
-    inline_kb = InlineKeyboardMarkup().add(inline_btn_generate)
-    debug = InlineKeyboardButton(text=translate[cache['lang']]['send_welcome'][16], callback_data='debug')
-    stop_button = InlineKeyboardMarkup().add(InlineKeyboardButton(text=translate[cache['lang']]['update_loadbar'][3], callback_data="stop_process"))
-    inline_kb.add(other_games)
-    inline_kb.add(inline_tasks)
-    inline_kb.add(giveaways)
+    WELCOME_MESS = None
+    
+    if cache['welcome']:
+        await try_to_delete(chat_id=message.chat.id, message_id=cache['welcome'])
+        cache['welcome'] = None
+    
+    inline_kb = InlineKeyboardMarkup().add(InlineKeyboardButton(translate[cache['lang']]['send_welcome'][0], callback_data='generate_menu'))
+    
+    inline_kb.add(InlineKeyboardButton(text=translate[cache['lang']]['send_welcome'][15], callback_data='other_games'))
+    inline_kb.add(InlineKeyboardButton(translate[cache['lang']]['send_welcome'][7], callback_data='generate_tasks'))
+    inline_kb.add(InlineKeyboardButton(text=translate[cache['lang']]['send_welcome'][10], callback_data='giveaways'))
+    
     if request_level(cache['right'], 3, message.chat.id): # 3 - report
-        inline_kb.add(inline_report)
+        inline_kb.add(InlineKeyboardButton(translate[cache['lang']]['send_welcome'][9], callback_data='report'))
+    
     elif request_level(cache['right'], 9, message.chat.id): # 9 - debug
-        inline_kb.add(inline_report, debug)
+        inline_kb.add(InlineKeyboardButton(translate[cache['lang']]['send_welcome'][9], callback_data='report'), 
+                      InlineKeyboardButton(text=translate[cache['lang']]['send_welcome'][16], callback_data='debug'))
+        
     if not cache['process']:
-        inline_kb.add(stop_button)
+        inline_kb.add(InlineKeyboardMarkup()
+                      .add(InlineKeyboardButton(text=translate[cache['lang']]['send_welcome'][17], callback_data="stop_process")))
+        
     today_keys = await get_all_user_keys_24h(user_id=message.chat.id, pool=POOL)
     user_limit_keys, global_limit_keys = await get_key_limit(user=message.chat.id)
     cache = await get_cached_data(message.chat.id) ##cache
@@ -679,7 +690,7 @@ async def send_welcome(message: types.Message) -> None:
     
     lost_tries = global_limit_keys - user_limit_keys
     cheating = lost_tries < 0
-    lost_tries = abs(lost_tries) if not cheating else 0
+    lost_tries = abs(lost_tries)
     
     def create_pseudo_file(content: str, filename: str = "keys.txt"):
         pseudo_file = BytesIO()
@@ -687,9 +698,6 @@ async def send_welcome(message: types.Message) -> None:
         pseudo_file.seek(0)
         pseudo_file.name = filename
         return pseudo_file
-
-    if cache['welcome']:
-        await try_to_delete(chat_id=message.chat.id, message_id=cache['welcome'])
     
     text1 =  snippet['bold'].format(text=translate[cache['lang']]['send_welcome'][1]) + "\n" + \
             translate[cache['lang']]['send_welcome'][11] + ":" +\
@@ -707,7 +715,7 @@ async def send_welcome(message: types.Message) -> None:
             
             text2 += '\n' + '\n'.join([f"{snippet['bold'].format(text=type + ':')} {snippet['code'].format(text=hide_key(key))} ({format_remaining_time(key_time, pref=cache['lang'])})" 
                                for key, key_time, type in today_keys[len(today_keys)-lost_tries:]])
-            text2 += '\n' + translate[cache['lang']]['send_welcome'][8]
+            text2 += '\n' + snippet['quote'].format(text=(translate[cache['lang']]['send_welcome'][8]))
             
         else:
             text2 = '\n'.join([f'{snippet["bold"].format(text=type + ":")} {snippet["code"].format(text=key)} ({format_remaining_time(key_time, pref=cache["lang"])})' 
@@ -717,23 +725,21 @@ async def send_welcome(message: types.Message) -> None:
         text2 = snippet['italic'].format(text=translate[cache['lang']]['send_welcome'][3])
         
     
-    text3 = f'\n\n{snippet["bold"].format(text=translate[cache["lang"]]["send_welcome"][4])} {lost_tries}/{global_limit_keys} (+{refs}) (-{delta})'
-    
+    text3 = f'\n\n{snippet["bold"].format(text=translate[cache["lang"]]["send_welcome"][4])} {lost_tries if not cheating else 0}/{global_limit_keys} (+{refs}) (-{delta})'
     text3 += "\n\n" + snippet['italic'].format(text=translate[cache['lang']]['send_welcome'][5])
     
     text = text1 + text2 + text3
     
     if len(text) < 4096:
         WELCOME_MESS = await new_message(text=text, chat_id=message.chat.id, keyboard=inline_kb, disable_preview=False)
-        if WELCOME_MESS:
-            cache['welcome'] = WELCOME_MESS.message_id
     else:
         keys = '\n'.join([f'{type}:\t{key}\t({format_remaining_time(key_time, pref=cache["lang"])})' for key, key_time, type in user_limit_keys])
         pseudo_file = create_pseudo_file(keys)
         text = text1 + f" {snippet['italic'].format(text=translate[cache['lang']]['send_welcome'][6])}" + text3
         WELCOME_MESS = await new_message(chat_id=message.chat.id, document=pseudo_file, text=text, keyboard=inline_kb)
-        if WELCOME_MESS:
-            cache['welcome'] = WELCOME_MESS.message_id
+    
+    if WELCOME_MESS:
+        cache['welcome'] = WELCOME_MESS.message_id
         
     await try_to_delete(chat_id=message.chat.id, message_id=message.message_id)
     await set_cached_data(message.chat.id, cache) ##write
@@ -746,6 +752,11 @@ async def process_callback_generate_menu(callback_query: types.CallbackQuery) ->
     
     if cache['welcome']:
         await try_to_delete(chat_id=message.chat.id, message_id=cache['welcome'])
+        cache['welcome'] = None
+    
+    if user_limit_keys >= global_limit_keys:
+        await send_error_message(message.chat.id, translate[cache['lang']]['process_callback_generate_menu'][4], only_dev=True)
+        return
     
     text = snippet['bold'].format(text=translate[cache['lang']]['process_callback_generate_menu'][0] + ":") + "\n"
     text += f"\n{snippet['bold'].format(text=translate[cache['lang']]['process_callback_generate_menu'][1])} {global_limit_keys - user_limit_keys}/{global_limit_keys}\n\n"
@@ -816,42 +827,32 @@ async def generate_key(callback_query: types.CallbackQuery) -> None:
             mins = json_config['EVENTS'][game_key]['EVENTS_DELAY'][0] * 15 // 60000 // 2 * count
             stop_button = InlineKeyboardMarkup().add(InlineKeyboardButton(text=translate[cache['lang']]['generate_key'][7], callback_data="main_menu"))
             LOADING_MESS = await new_message(text=translate[cache['lang']]['generate_key'][0].replace('{mins}', str(mins)), chat_id=message.chat.id, keyboard=stop_button)
-            cache['loading'] = LOADING_MESS.message_id
-            await set_cached_data(message.chat.id, cache) ##write
             try:
                 async with aiohttp.ClientSession() as session:
                     # cache['process'] = False
                     key = await update_loadbar(message.chat.id, game_key, session, count)
                 await try_to_edit(text=message.html_text, chat_id=message.chat.id, message_id=message.message_id, keyboard=stop_button)
                 
-                # await set_cached_data(message.chat.id, cache) ##write
-                cache['process'] = True
-                await try_to_delete(message.chat.id, cache['loading'])
-                if key:
-                    for k in key:
-                        await insert_key_generation(message.chat.id, k, game_key, pool=POOL)
                 key_text = '\n'.join([snippet['bold'].format(text=game_key) + ": " + snippet['code'].format(text=k) for k in key if k is not None]) \
                             if key and len(key) > 0 else translate[cache['lang']]['generate_key'][2]
                 stop_button = InlineKeyboardMarkup().add(InlineKeyboardButton(text=translate[cache['lang']]['generate_key'][7], callback_data="main_menu"))
                 LOADING_MESS = await new_message(text=translate[cache['lang']]['generate_key'][3].replace('{key}', key_text), chat_id=message.chat.id, keyboard=stop_button)
-                cache['loading'] = LOADING_MESS.message_id
-                await set_cached_data(message.chat.id, cache) ##write
-                cache['process'] = True
             except Exception as e:
-                if cache['loading']:
-                    await try_to_delete(message.chat.id, cache['loading'])
                 LOADING_MESS = await send_error_message(message.chat.id, translate[cache['lang']]['generate_key'][2], e)
-                cache['process'] = True
-                cache['loading'] = LOADING_MESS.message_id
-                await set_cached_data(message.chat.id, cache) ##write
         else:
-            cache['process'] = True
+            
             text = translate[cache['lang']]['generate_key'][4]
             if cache['loading']:
                 await try_to_delete(chat_id=message.chat.id, message_id=cache['loading'])
             LOADING_MESS = await new_message(text=text, chat_id=message.chat.id)
+        
+        cache['process'] = True
+        await set_cached_data(message.chat.id, cache) ##write    
+        if cache['loading']:
+            await try_to_delete(chat_id=message.chat.id, message_id=cache['loading'])
+        if LOADING_MESS:
             cache['loading'] = LOADING_MESS.message_id
-            await set_cached_data(message.chat.id, cache) ##write
+        await set_cached_data(message.chat.id, cache) ##write
     elif not can_generate_key():
         text = translate[cache['lang']]['generate_key'][5].replace('{last_user_key}', snippet['code'].format(text=last_user_key['key'])).replace('{relative_time}', str(db_config['DELAY'] - relative_time(last_user_key['time'])))
         LOADING_MESS = await new_message(text=text, chat_id=message.chat.id)
@@ -887,8 +888,9 @@ async def get_key_limit(user: int, default:int=db_config['COUNT']):
         num_str = str(completed - len(user_tasks))
         # if cache.get('error'):
         #     await try_to_delete(user, cache['error'])
-        ERROR_MES = await send_error_message(user, translate[cache.get('lang', 'en')]['get_key_limit'][0] + ": " + snippet['bold'].format(text=num_str))
-        cache.update({'tasks': len(user_tasks), 'error': ERROR_MES.message_id})
+        await send_error_message(user, translate[cache.get('lang', 'en')]['get_key_limit'][0] + ": " + snippet['bold'].format(text=num_str))
+
+    cache.update({'tasks': len(user_tasks)})
     
     await set_cached_data(user, cache, pool=POOL)
     return user_limit_keys, count - delta
@@ -966,7 +968,7 @@ async def process_callback_generate_tasks(callback_query: types.CallbackQuery) -
 
     keyboard = InlineKeyboardMarkup()
     for task in all:
-        mark = '✅ ' if str(task) in used else ''
+        mark = '✅ ' if str(task) in used else '❌ '
         inline_btn = InlineKeyboardButton(text=mark + all[task]['name'], callback_data=f'generate_task_{task}')
         keyboard.add(inline_btn)
         
@@ -1005,6 +1007,8 @@ async def generate_task_message(callback_query: types.CallbackQuery) -> None:
         if current_task['control'] == 1:
             checker = await bot.get_chat_member(chat_id=current_task['check_id'], user_id=user_id)
             is_task_completed = checker and checker.status != 'left'
+        elif current_task['control'] == 0:
+            is_task_completed = int(task_id) in [int(x) for x in used]
     except (ChatNotFound):
         if current_task['control'] != 0 and 't.me' in current_task['link']:
             error_key = 7 
@@ -1032,10 +1036,6 @@ async def generate_task_message(callback_query: types.CallbackQuery) -> None:
             is_task_completed = False
     except (Exception) as e:
         await send_error_message(message.chat.id, 'Error occured: ' + str(e), only_dev=True)
-
-    # Проверяем выполненные задания
-    promo_ids = await get_checker_by_user_id(user_id=user_id) or []
-    is_task_completed = is_task_completed or (int(task_id) in promo_ids and current_task['control'] == 0)
 
     # Формируем текст и кнопки для сообщения
     mark = '✅ ' if is_task_completed else ''
