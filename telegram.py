@@ -1343,7 +1343,7 @@ async def get_chat_permissions(chat):
         logger.error(f"Error getting chat permissions: {e}")
         return {}
 
-async def get_chat_info(id):
+async def get_chat_info(id, ubdefined="---"):
     try:
         chat = await bot.get_chat(id)
         bot_member = await bot.get_chat_member(chat.id, bot.id)
@@ -1361,7 +1361,7 @@ async def get_chat_info(id):
         return chat_info + "\n"
     except Exception as e:
         logger.error(e)
-        chat_info = f"Name: --- ({id}), Type: (Undefined for some reason: {e})\n\n"
+        chat_info = f"Name (task): {ubdefined} ({id}), Type: (Undefined for some reason: {e})\n\n"
         return chat_info
 
 async def save_to_file(file_path, content):
@@ -1396,7 +1396,8 @@ async def send_files(callback_query: types.CallbackQuery):
 
     users = await get_all_user_ids(pool=POOL)
     promo = await get_promotions(pool=POOL)
-    chat_ids = set(promo[x]['check_id'] for x in promo) | set(promo[x].get('chat_id') for x in promo if 'chat_id' in x and promo[x].get('chat_id'))
+    chats = [[promo[x]['check_id'], promo[x].get('name')] for x in promo] \
+               + [[promo[x]['check_id'], promo[x].get('name')] for x in promo if 'chat_id' in x and promo[x].get('chat_id')]
 
     user_tasks = []
     chat_tasks = []
@@ -1405,14 +1406,14 @@ async def send_files(callback_query: types.CallbackQuery):
         async with semaphore:
             return await get_user_info(user)
     
-    async def bounded_get_chat_info(chat_id):
+    async def bounded_get_chat_info(chat_id, ubdefined='---'):
         async with semaphore:
-            return await get_chat_info(chat_id)
+            return await get_chat_info(chat_id, ubdefined)
 
     for user in users:
         user_tasks.append(asyncio.create_task(bounded_get_user_info(user)))
-    for chat_id in chat_ids:
-        chat_tasks.append(asyncio.create_task(bounded_get_chat_info(chat_id)))
+    for chats in chats:
+        chat_tasks.append(asyncio.create_task(bounded_get_chat_info(chat_id=chats[0], ubdefined=chats[1])))
 
     while any(not task.done() for task in user_tasks + chat_tasks):
         cache = await get_cached_data(chat.id)
@@ -1506,7 +1507,7 @@ async def on_startup(dp):
     #     asyncio.create_task(mining(POOL))
 
     # Подготовка сообщения для разработчика
-    stop_button = InlineKeyboardMarkup().add(InlineKeyboardButton(text="Main menu", callback_data="close"))
+    stop_button = InlineKeyboardMarkup().add(InlineKeyboardButton(text="Main menu", callback_data="main_menu"))
     text = {
         "ru": "Бот перезапущен, пожалуйста, сгенеруйте ключ заново (/start)", 
         "en": "Bot now restarted, please generate key again (/start)"
