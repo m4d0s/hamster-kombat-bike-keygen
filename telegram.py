@@ -460,10 +460,9 @@ async def send_error_message(chat_id:int, message:str, e:Exception = None, only_
 async def new_message(text: str, chat_id: int, keyboard: InlineKeyboardMarkup = None, disable_preview:bool = True, document = None, parse_mode = ParseMode.HTML) -> types.Message:
     try:
         if document:
-            return await bot.send_document(text=html_back_escape(text), 
+            return await bot.send_document(caption=html_back_escape(text), 
                                            chat_id=chat_id, 
                                            parse_mode=parse_mode, 
-                                           disable_web_page_preview=disable_preview, 
                                            reply_markup=keyboard, 
                                            document=document)
         return await bot.send_message(text=html_back_escape(text), 
@@ -733,7 +732,7 @@ async def send_welcome(message: types.Message) -> None:
     if len(text) < 4096:
         WELCOME_MESS = await new_message(text=text, chat_id=message.chat.id, keyboard=inline_kb, disable_preview=False)
     else:
-        keys = '\n'.join([f'{type}:\t{key}\t({format_remaining_time(key_time, pref=cache["lang"])})' for key, key_time, type in user_limit_keys])
+        keys = '\n'.join([f'{type}:\t{key}\t({format_remaining_time(key_time, pref=cache["lang"])})' for key, key_time, type in today_keys])
         pseudo_file = create_pseudo_file(keys)
         text = text1 + f" {snippet['italic'].format(text=translate[cache['lang']]['send_welcome'][6])}" + text3
         WELCOME_MESS = await new_message(chat_id=message.chat.id, document=pseudo_file, text=text, keyboard=inline_kb)
@@ -782,6 +781,8 @@ async def process_callback_generate_menu(callback_query: types.CallbackQuery) ->
     await set_cached_data(message.chat.id, cache) ##write
 
 
+
+#keys funcs
 @dp.callback_query_handler(lambda c: c.data.startswith('generate_key_'))
 async def process_callback_generate_key(callback_query: types.CallbackQuery) -> None:
     used, all = await get_key_limit(user=callback_query.message.chat.id)
@@ -800,7 +801,6 @@ async def process_callback_generate_key(callback_query: types.CallbackQuery) -> 
     cache['welcome'] = mess.message_id
     await set_cached_data(callback_query.message.chat.id, cache)
 
-#keys funcs
 @dp.callback_query_handler(lambda c: c.data.startswith('countkey_'))
 async def generate_key(callback_query: types.CallbackQuery) -> None:
     message = callback_query.message
@@ -894,7 +894,6 @@ async def get_key_limit(user: int, default:int=db_config['COUNT']):
     
     await set_cached_data(user, cache, pool=POOL)
     return user_limit_keys, count - delta
-
 
 
 
