@@ -743,6 +743,10 @@ async def send_welcome(message: types.Message) -> None:
     await try_to_delete(chat_id=message.chat.id, message_id=message.message_id)
     await set_cached_data(message.chat.id, cache) ##write
 
+
+
+
+#keys funcs
 @dp.callback_query_handler(lambda c: c.data == 'generate_menu')
 async def process_callback_generate_menu(callback_query: types.CallbackQuery) -> None:
     message = callback_query.message
@@ -754,7 +758,7 @@ async def process_callback_generate_menu(callback_query: types.CallbackQuery) ->
         cache['welcome'] = None
     
     if user_limit_keys >= global_limit_keys:
-        await send_error_message(message.chat.id, translate[cache['lang']]['process_callback_generate_menu'][4], only_dev=True)
+        await send_error_message(message.chat.id, translate[cache['lang']]['process_callback_generate_menu'][4])
         return
     
     text = snippet['bold'].format(text=translate[cache['lang']]['process_callback_generate_menu'][0] + ":") + "\n"
@@ -780,9 +784,6 @@ async def process_callback_generate_menu(callback_query: types.CallbackQuery) ->
     
     await set_cached_data(message.chat.id, cache) ##write
 
-
-
-#keys funcs
 @dp.callback_query_handler(lambda c: c.data.startswith('generate_key_'))
 async def process_callback_generate_key(callback_query: types.CallbackQuery) -> None:
     used, all = await get_key_limit(user=callback_query.message.chat.id)
