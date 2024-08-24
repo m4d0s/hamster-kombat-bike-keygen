@@ -356,7 +356,7 @@ async def get_unused_key_of_type(key_type: str, pool=None, day: float = 1.0):
     return row['key'] if row else None
 
 
-async def get_all_user_keys_24h(user_id: int, pool=None, day: float = 1.0) -> list:
+async def get_all_user_keys_24h(user_id: int, pool=None) -> list:
     if user_id is None:
         return []
     if pool is None:
@@ -369,12 +369,12 @@ async def get_all_user_keys_24h(user_id: int, pool=None, day: float = 1.0) -> li
     # SQL запрос для получения ключей пользователя за последние 24 часа
     query = (
         f'SELECT key, time, type FROM "{SCHEMAS["HAMSTER"]}".keys '
-        'WHERE user_id = $1 AND used = false '
+        'WHERE user_id = $1 AND used = true '
         'AND $2 < time AND time < $3 '
         'ORDER BY time ASC'
     )
     
-    start_time = get_utc_time(0, 0, 0, delta_days=-day)
+    start_time = get_utc_time(0, 0, 0, delta_days=0)
     end_time = get_utc_time(0, 0, 0, delta_days=1)
 
     async with pool.acquire() as conn:
