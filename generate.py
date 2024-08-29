@@ -95,7 +95,7 @@ async def fetch_api(session: aiohttp.ClientSession, path: str, body: dict, auth:
     if not proxy or len(proxy) == 0:
         logger.warning('No proxy found, use localhost (no proxy)')
     else:
-        logger.info(f'Using proxy: {proxy["link"].split("@")[1] if "@" in proxy["link"] else proxy["link"].split("://")[1]} ({proxy["link"].split(":")[0].upper()})')
+        logger.debug(f'Using proxy: {proxy["link"].split("@")[1] if "@" in proxy["link"] else proxy["link"].split("://")[1]} ({proxy["link"].split(":")[0].upper()})')
     proxy_str = proxy['link'] if proxy else None
 
     try:
