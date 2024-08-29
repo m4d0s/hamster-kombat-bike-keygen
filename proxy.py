@@ -26,7 +26,7 @@ def get_ipv6_addresses():
             if addr.family == socket.AF_INET6 and not is_local_address(addr.address): 
                 ipv6_addresses.append([i, addr.address, interface, 8080])
                 i += 1
-    id = int(input('Enter port (8080 by default, enter 0 to disable): ')) or 8080
+    id = json_config['PORT']
     ipv6_addresses[0][3] = id
     return ipv6_addresses[0]
 
