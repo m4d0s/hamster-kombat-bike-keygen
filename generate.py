@@ -35,7 +35,7 @@ async def check_proxy(proxy: str, test_url: str = 'http://httpbin.org/ip', timeo
     print(f"Proxy {proxy} cabt not work after {retries} tries")
     return False
 
-def get_logger(file_level=logging.INFO, base_level=logging.INFO):
+def get_logger(file_level=logging.INFO, base_level=logging.DEBUG):
     # Создаем логгер
     # asyncio.get_event_loop().set_debug(config['DEBUG_LOG'])
     logger = logging.getLogger("logger")

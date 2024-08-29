@@ -95,7 +95,7 @@ async def get_free_proxy(pool=POOL):
             if not proxy:
                 proxy = await conn.fetchrow(f'''
                     SELECT link, work FROM "{SCHEMAS["CONFIG"]}".proxy
-                    ORDER BY RANDOM() LIMIT 1
+                    WHERE version = 'ipv4' ORDER BY RANDOM() LIMIT 1
                 ''')
 
             if proxy:
