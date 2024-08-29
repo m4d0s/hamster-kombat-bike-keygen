@@ -3,7 +3,6 @@
     "DEV_ID": 5043492422,
     "MAIN_GROUP": 0,
     "MAIN_CHANNEL": 0,
-    "COUNT": 0,
     "DELAY": 30,
     "MAX_RETRY": 15,
     "MINING": true,
@@ -15,6 +14,7 @@
     "DEBUG_KEY": "C0D3-TH1S-1S-JU5T-T35T",
     "DEBUG_GAME": "C0D3",
     "GEN_PROXY": 40,
+    "IPV6": true,
     "PROXY": [],
     "SCHEMAS": {
         "HAMSTER": "hamster-kombat-keys",
@@ -111,6 +111,16 @@
                 25000
             ],
             "DISABLED": true
+        },
+        "CAFE": {
+            "NAME": "Cafe Dash",
+            "APP_TOKEN": "bc0971b8-04df-4e72-8a3e-ec4dc663cd11",
+            "PROMO_ID": "bc0971b8-04df-4e72-8a3e-ec4dc663cd11",
+            "EVENTS_DELAY": [
+                20000,
+                25000
+            ],
+            "DISABLED": false
         }
     }
 }

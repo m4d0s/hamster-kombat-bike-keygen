@@ -5,13 +5,13 @@ import asyncio
 import aiohttp
 import uuid
 import os
-from random import randint
-from database import log_timestamp, get_proxies, set_proxy, get_free_proxy
+from database import log_timestamp
+from proxy import get_free_proxy, set_proxy, get_proxies
 
 # Load configuration
 config = json.loads(open('config.json').read())
 PROXY_LIST = asyncio.get_event_loop().run_until_complete(get_proxies())
-PROXY_LIST = [{'link': x['link'], 'work': x['work']} for x in PROXY_LIST]  # Load the list of proxies from config
+PROXY_LIST = [{'link': x['link'], 'work': x['work']} for x in PROXY_LIST]  # Load the list of proxies from c_telegramig
 farmed_keys, attempts = 0, {}
 users = [x for x in config['EVENTS']]
 
@@ -141,7 +141,7 @@ async def get_key(session, game_key, pool=None):
         body = {
             'appToken': game_config['APP_TOKEN'],
             'clientId': client_id,
-            'clientOrigin': ['deviceid', 'ios', 'android'].pop(random.randint(0, 2))
+            'clientOrigin': ['ios', 'android'].pop(random.randint(0, 1))
         }
         login_client_data = await fetch_api(session, '/promo/login-client', body, proxy=proxy)
         await delay(delay_ms, "Login delay")

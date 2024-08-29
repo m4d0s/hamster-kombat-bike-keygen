@@ -31,7 +31,6 @@ async def get_pool(mining=False) -> asyncpg.Pool:
 
 
 
-
 #config
 async def get_config(pool=POOL):
     if pool is None:
@@ -51,22 +50,6 @@ async def get_config(pool=POOL):
             }
 
     return config
-
-async def get_proxies(pool=POOL):
-    if pool is None:
-        pool = await get_pool()  # Получаем пул соединений, если он не был передан
-
-    proxies = {}
-
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            proxy_rows = await conn.fetch(f'SELECT id, proxy, work FROM "{SCHEMAS["CONFIG"]}".proxy')
-            proxies = {
-                row['proxy']: row['work']
-                for row in proxy_rows
-            }
-
-    return proxies
 
 async def set_config(config, pool=POOL):
     if pool is None:
@@ -91,49 +74,12 @@ async def set_config(config, pool=POOL):
                     ON CONFLICT (key) DO UPDATE
                     SET value = EXCLUDED.value
                 ''', key.lower(), value)
-           
-async def set_proxy(proxies:dict, pool=POOL):
-    if pool is None:
-        pool = await get_pool()  # Получаем пул соединений, если он не был передан
-
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            for proxy in proxies:
-                await conn.execute(f'''
-                    INSERT INTO "{SCHEMAS["CONFIG"]}".proxy (link, work, time)
-                    VALUES ($1, $2, $3)
-                    ON CONFLICT (link) DO UPDATE
-                    SET work = EXCLUDED.work, time = EXCLUDED.time
-                ''', proxy, proxies[proxy], now())       
-
-async def get_free_proxy(pool=POOL):
-    if pool is None:
-        pool = await get_pool()  # Получаем пул соединений, если он не был передан
-
-    async with pool.acquire() as conn:
-        async with conn.transaction():
-            proxy = await conn.fetchrow(f'''
-                SELECT link, work FROM "{SCHEMAS["CONFIG"]}".proxy
-                WHERE work = false LIMIT 1
-            ''')
-
-            if not proxy:
-                proxy = await conn.fetchrow(f'''
-                    SELECT link, work FROM "{SCHEMAS["CONFIG"]}".proxy
-                    ORDER BY RANDOM() LIMIT 1
-                ''')
-
-            if proxy:
-                await set_proxy({proxy['link']: True}, pool=pool)
-
-    return {'link': proxy['link'], 'work': proxy['work']} if proxy else None
 
 
 
 
-
-#promo(tasks)
-async def append_checker(user_id: int, promo_id: int, pool=POOL):
+#promo
+async def append_checker(user_id: int, promo_id: int,  pool=POOL):
     if user_id is None or promo_id is None:
         return
     
@@ -165,12 +111,29 @@ async def get_checker_by_user_id(user_id:int, pool=POOL):
     async with pool.acquire() as conn:
         async with conn.transaction():
             nums = await conn.fetch(
-                f'SELECT * FROM "{SCHEMAS["PROMOTION"]}".checker WHERE user_id = $1 ORDER BY id DESC LIMIT 1',
+                f'SELECT * FROM "{SCHEMAS["PROMOTION"]}".checker WHERE user_id = $1 ORDER BY id DESC',
                 num
             )
             return [row['promo_id'] for row in nums] if nums else []
 
-async def get_promotions(task_type: str = 'task', pool=None):
+async def get_checker_by_task_id(task_id:int, pool=POOL):
+    if task_id is None:
+        return
+    
+    if pool is None:
+        pool = await get_pool()
+        
+
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            nums = await conn.fetch(
+                f'SELECT * FROM "{SCHEMAS["PROMOTION"]}".checker WHERE promo_id = $1 ORDER BY id ASC',
+                task_id
+            )
+            return set([row['user_id'] for row in nums]) if nums else []
+
+
+async def get_promotions(task_type: str = 'task', all=False, delay=0, pool=None):
     if not pool:
         pool = await get_pool()
     
@@ -178,8 +141,8 @@ async def get_promotions(task_type: str = 'task', pool=None):
         async with conn.transaction():
             # Получаем все промо по типу
             promo_rows = await conn.fetch(
-                f'SELECT * FROM "{SCHEMAS["PROMOTION"]}".promo WHERE type = $1 and expire > $2',
-                task_type, now()
+                f'SELECT * FROM "{SCHEMAS["PROMOTION"]}".promo WHERE type = $1{" and expire > " + str(now() + delay) if not all else ""}',
+                task_type
             )
             # Преобразуем строки в словарь
             result = {str(row['id']): dict(row) for row in promo_rows}
@@ -202,6 +165,14 @@ async def get_promotions(task_type: str = 'task', pool=None):
                             result[promo_id][lang] = {}
                         
                         result[promo_id][lang][translation_type] = value
+            
+                    if task_type == 'giveaway':
+                        prizes_q = f"SELECT * FROM \"{SCHEMAS['PROMOTION']}\".promo_prizes WHERE promo_id = $1 ORDER BY place ASC"
+                        prizes = await conn.fetch(prizes_q, int(promo_id))
+                        result[promo_id]['prizes'] = []
+                        for row in prizes:
+                            input = dict(row)
+                            result[promo_id]['prizes'].append(input)
 
     return result
 
@@ -222,14 +193,6 @@ async def insert_task(task: dict, check: int = 1, task_type: str = 'task', expir
                 f'''
                 INSERT INTO "{SCHEMAS["PROMOTION"]}".promo (name, "desc", link, check_id, control, type, time, expire) 
                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                ON CONFLICT (check_id) 
-                DO UPDATE SET 
-                    name = EXCLUDED.name, 
-                    "desc" = EXCLUDED."desc", 
-                    link = EXCLUDED.link, 
-                    control = EXCLUDED.control,
-                    time = EXCLUDED.time,
-                    expire = EXCLUDED.expire
                 RETURNING id
                 ''',
                 task['name'], task['desc'], task['link'], task['check_id'], check, task_type, now(), task['expire']
@@ -243,8 +206,7 @@ async def insert_task(task: dict, check: int = 1, task_type: str = 'task', expir
                     continue
                 
                 for obj, value in translations.items():
-                    if obj in ['check_id']:
-                        value = str(value)
+                    value = str(value)
                     some_id = await conn.fetchrow(
                         f'''
                         SELECT id FROM "{SCHEMAS["PROMOTION"]}".promo_translate
@@ -270,6 +232,34 @@ async def insert_task(task: dict, check: int = 1, task_type: str = 'task', expir
                             ''',
                             value, some_id['id']
                         )
+                
+            if task_type == 'giveaway' and 'prizes' in task:
+                for prize in task['prizes']:
+                    if 'id' in prize:
+                        # Pop the 'id' key from the prize dictionary to get the id value.
+                        id = prize.pop('id')
+
+                        # Construct the UPDATE SQL query.
+                        query = f'''
+                            UPDATE "{SCHEMAS["PROMOTION"]}".promo_prizes 
+                            SET {", ".join([f"{key} = ${i+3}" for i, key in enumerate(prize.keys())])} 
+                            WHERE promo_id = $1 AND id = $2
+                        '''
+
+                        # Execute the UPDATE query, passing task_id, id, and prize values.
+                        await conn.execute(query, task_id, id, *[prize[key] for key in prize])
+
+                    else:
+                        # Construct the INSERT SQL query.
+                        query = f'''
+                            INSERT INTO "{SCHEMAS["PROMOTION"]}".promo_prizes ({", ".join(prize.keys())})
+                            VALUES ({", ".join([f"${i+1}" for i in range(len(prize))])})
+                            RETURNING id
+                        '''
+
+                        # Execute the INSERT query, passing task_id and prize values.
+                        await conn.execute(query, *[prize[key] for key in prize])
+
     
     return task_id
 
@@ -356,7 +346,7 @@ async def get_unused_key_of_type(key_type: str, pool=None, day: float = 1.0):
     return row['key'] if row else None
 
 
-async def get_all_user_keys_24h(user_id: int, pool=None) -> list:
+async def get_all_user_keys_24h(user_id: int, start=None, end=None, pool=None) -> list:
     if user_id is None:
         return []
     if pool is None:
@@ -374,8 +364,8 @@ async def get_all_user_keys_24h(user_id: int, pool=None) -> list:
         'ORDER BY time ASC'
     )
     
-    start_time = get_utc_time(0, 0, 0, delta_days=0)
-    end_time = get_utc_time(0, 0, 0, delta_days=1)
+    start_time = start or get_utc_time(0, 0, 0, delta_days=0)
+    end_time = end or get_utc_time(0, 0, 0, delta_days=1)
 
     async with pool.acquire() as conn:
         async with conn.transaction():
@@ -501,7 +491,7 @@ async def get_all_refs(user_id:int, pool=POOL) -> list:
     ref_ids = [row['ref_id'] for row in rows] if rows else []
     return ref_ids
     
-async def insert_user(user_id:int, username:str, ref=0, lang='en', pool=POOL) -> int:
+async def insert_user(user_id:int, username:str, ref=0, lang='en', tg_lang='en', pool=POOL) -> int:
     if user_id is None or username is None:
         return
     if pool is None:
@@ -509,18 +499,18 @@ async def insert_user(user_id:int, username:str, ref=0, lang='en', pool=POOL) ->
         
     async with pool.acquire() as conn:
         async with conn.transaction():
-            await conn.execute(f'INSERT INTO "{SCHEMAS["HAMSTER"]}".users (tg_id, tg_username, ref_id, lang) '+
-                               'VALUES ($1, $2, $3, $4) '+
+            await conn.execute(f'INSERT INTO "{SCHEMAS["HAMSTER"]}".users (tg_id, tg_username, ref_id, lang, tg_lang) '+
+                               'VALUES ($1, $2, $3, $4, $5) '+
                                'ON CONFLICT (tg_id) DO UPDATE '+
-                               'SET tg_username = EXCLUDED.tg_username', 
-                               user_id, username, ref, lang)
+                               'SET tg_username = EXCLUDED.tg_username, lang = EXCLUDED.lang, tg_lang = EXCLUDED.tg_lang', 
+                               user_id, username, ref, lang, tg_lang)
             num = await conn.fetchrow(f'SELECT id FROM "{SCHEMAS["HAMSTER"]}".users WHERE tg_id = $1 ORDER BY id DESC LIMIT 1', user_id)
             if num is None:
                 return None
             num = num['id']
             await conn.execute(f'INSERT INTO "{SCHEMAS["HAMSTER"]}".cache (user_id) VALUES ($1) ON CONFLICT DO NOTHING', num)
 
-async def get_user(user_id:int, pool=POOL) -> dict:
+async def get_user(user_id:int, pool=POOL, tg = True) -> dict:
     if user_id is None:
         return
     if pool is None:
@@ -528,15 +518,10 @@ async def get_user(user_id:int, pool=POOL) -> dict:
         
     async with pool.acquire() as conn:
         async with conn.transaction():
-            row = await conn.fetchrow(f'SELECT * FROM "{SCHEMAS["HAMSTER"]}".users WHERE tg_id = $1', user_id)
+            row = await conn.fetchrow(f'SELECT * FROM "{SCHEMAS["HAMSTER"]}".users WHERE tg_id = $1', user_id) if tg \
+                else await conn.fetchrow(f'SELECT * FROM "{SCHEMAS["HAMSTER"]}".users WHERE id = $1', user_id)
     
-    return {'username': row['tg_username'], 
-            'tg_id': row['tg_id'], 
-            'ref_id': row['ref_id'], 
-            'lang': row['lang'], 
-            'right': row['right'],
-            'ref': row['ref_id'],
-            'id': row['id']} if row else None
+    return {key: value for key, value in zip(row.keys(), row.values())} if row else None
 
 async def delete_user(user_id: int, pool=POOL) -> None:
     if user_id is None:
@@ -580,7 +565,7 @@ async def get_user_id(tg_id:int, pool=POOL):
 
 #time functions
 def now() -> int:
-    return int(datetime.now().timestamp())
+    return int(datetime.now(timezone.utc).timestamp())
 
 def relative_time(time, reverse=False):
     if reverse:
@@ -595,8 +580,11 @@ def format_remaining_time(target_time: int, pref='en', reverse=False) -> str:
 
     seconds = delta % 60
     minutes = (delta // 60) % 60
-    hours = int(delta // 3600)
+    hours = int(delta // 3600) % 24
+    days = int(delta // 86400) 
     
+    if days > 0:
+        return ' '.join([str(days), translate[4], prefix])
     if hours > 0:
         return ' '.join([str(hours), translate[1], str(minutes), translate[2], prefix])
     elif minutes > 0:
