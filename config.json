@@ -8,7 +8,7 @@
     "MINING": true,
     "DB": "postgresql://postgres:password@127.0.0.1:5432/postgres",
     "MINING_DB": "postgresql://postgres:password@127.0.0.1:5432/postgres",
-    "DEBUG": true,
+    "DEBUG": false,
     "DEBUG_LOG": true,
     "DEBUG_DELAY": 10000,
     "DEBUG_KEY": "C0D3-TH1S-1S-JU5T-T35T",

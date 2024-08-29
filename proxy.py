@@ -57,7 +57,7 @@ def generate_alternative_ipv6():
     ipv6_address[1] = str(new_address)
     
     # Log and validate the new address
-    print(f"Generated IPv6 Address: {ipv6_address[1]}")
+    # print(f"Generated IPv6 Address: {ipv6_address[1]}")
     
     return ipv6_address
 
