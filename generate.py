@@ -6,12 +6,10 @@ import aiohttp
 import uuid
 import os
 from database import log_timestamp
-from proxy import get_free_proxy, set_proxy, get_proxies
+from proxy import get_free_proxy, set_proxy
 
 # Load configuration
 config = json.loads(open('config.json').read())
-PROXY_LIST = asyncio.get_event_loop().run_until_complete(get_proxies())
-PROXY_LIST = [{'link': x['link'], 'work': x['work']} for x in PROXY_LIST]  # Load the list of proxies from c_telegramig
 farmed_keys, attempts = 0, {}
 users = [x for x in config['EVENTS']]
 
@@ -97,30 +95,28 @@ async def fetch_api(session: aiohttp.ClientSession, path: str, body: dict, auth:
     if not proxy or len(proxy) == 0:
         logger.warning('No proxy found, use localhost (no proxy)')
     else:
-        logger.debug(f'Using proxy: {proxy["link"].split("@")[1]} ({proxy["link"].split(":")[0].upper()})')
+        logger.info(f'Using proxy: {proxy["link"].split("@")[1] if "@" in proxy["link"] else proxy["link"].split("://")[1]} ({proxy["link"].split(":")[0].upper()})')
     proxy_str = proxy['link'] if proxy else None
 
     try:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, headers=headers, json=body, proxy=proxy_str) as res:
-                logger.debug(f'Using proxy: {proxy["link"].split("@")[1] if proxy else "localhost"}')
-                logger.debug(f'URL: {url}')
-                logger.debug(f'Headers: {headers}')
-                logger.debug(f'Body: {body}')
-                logger.debug(f'Response Status: {res.status}')
+        async with session.post(url, headers=headers, json=body, proxy=proxy_str) as res:
+            logger.debug(f'URL: {url}')
+            logger.debug(f'Headers: {headers}')
+            logger.debug(f'Body: {body}')
+            logger.debug(f'Response Status: {res.status}')
 
-                if not res.ok:
-                    await delay(config['DELAY'] * 1000, "API error")
-                    await set_proxy({proxy['link']: False})
-                    if str(res.status) == '400':
-                        logger.debug(f'Response: {res.status} {res.reason}')
-                    else:
-                        raise Exception(f"{res.status} {res.reason}")
+            if not res.ok:
+                await delay(config['DELAY'] * 1000, "API error")
+                await set_proxy({proxy['link']: False})
+                if str(res.status) == '400':
+                    logger.debug(f'Response: {res.status} {res.reason}')
+                else:
+                    raise Exception(f"{res.status} {res.reason}")
 
-                # Парсинг только JSON (экономия трафика)
-                response_data = await res.json()
+            # Парсинг только JSON (экономия трафика)
+            response_data = await res.json()
 
-                return response_data
+            return response_data
             
     except Exception as e:
         error_text =  str(e)

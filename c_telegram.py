@@ -44,7 +44,7 @@ async def reload_config(config_path='config.json', pool=POOL):
         'DEBUG_GAME': 'C0D3',
     }
     
-    dont_touch = ["EVENTS", "SCHEMAS", "DEBUG_DELAY", "DEBUG_KEY", "DEBUG", "DB", "DEBUG_GAME",
+    dont_touch = ["EVENTS", "SCHEMAS", "DEBUG_DELAY", "DEBUG_KEY", "DEBUG", "DB", "DEBUG_GAME", "IPV6"
                   "GEN_PROXY", "MAX_RETRY", "DELAY", "DEBUG_LOG", "MINING", "MINING_DB", "DEV_ID", "IPV6_PORT"]
     need_to = ["DEV_ID", "API_TOKEN", "MAIN_GROUP", "MAIN_CHANNEL", "PROXY"]
     
