@@ -26,12 +26,9 @@ def get_ipv6_addresses():
             if addr.family == socket.AF_INET6 and not is_local_address(addr.address): 
                 ipv6_addresses.append([i, addr.address, interface, 8080])
                 i += 1
-    id = int(input('Enter port (8080 by default, 0 to disable): '))
-    if id and id != 0:
-        ipv6_addresses[0][3] = id
-    else:
-        id = 0
-    return ipv6_addresses[0] if i > 0 and id != 0 else None
+    id = int(input('Enter port (8080 by default, enter 0 to disable): ')) or 8080
+    ipv6_addresses[0][3] = id
+    return ipv6_addresses[0]
 
 ipv6_address = None
 
@@ -72,7 +69,7 @@ async def get_free_proxy(pool=POOL):
     if json_config['IPV6']:
         global ipv6_address
         ipv6_address = ipv6_address or get_ipv6_addresses()
-        if ipv6_address:
+        if ipv6_address and ipv6_address[3] != 0:
             return {'link': f'https://[{ipv6_address[1]}]:{ipv6_address[3]}', 'work': False, 'version': 'ipv6'}
         
 
