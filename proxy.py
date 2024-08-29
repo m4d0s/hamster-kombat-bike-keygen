@@ -26,7 +26,7 @@ def get_ipv6_addresses():
             if addr.family == socket.AF_INET6 and not is_local_address(addr.address): 
                 ipv6_addresses.append([i, addr.address, interface, 8080])
                 i += 1
-    id = json_config['PORT']
+    id = json_config['IPV6_PORT']
     ipv6_addresses[0][3] = id
     return ipv6_addresses[0]
 
@@ -66,7 +66,7 @@ async def get_free_proxy(pool=POOL):
     if pool is None:
         pool = await get_pool()  # Получаем пул соединений, если он не был передан
     
-    if json_config['IPV6']:
+    if json_config['IPV6_PORT'] > 0:
         global ipv6_address
         ipv6_address = ipv6_address or get_ipv6_addresses()
         if ipv6_address and ipv6_address[3] != 0:
