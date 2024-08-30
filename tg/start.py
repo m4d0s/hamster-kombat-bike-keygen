@@ -57,9 +57,9 @@ async def send_language_choose(message: types.Message) -> None:
     cache = await get_cached_data(message.chat.id) ##cache
     user = await get_user(message.chat.id, pool=POOL)
     logger.debug("User {user_id} started bot, lang: {lang}".format(user_id=message.chat.id, lang=message.from_user.language_code))
-    if not user:
+    if not user and message.text.startswith('/language'):
         lang_code = message.from_user.language_code
-        if lang_code and lang_code in translate.keys():
+        if lang_code and lang_code in translate.keys() and not message.text.startswith('/language'):
             fake_callback = types.CallbackQuery(id=f"simulated_lang_{lang_code}_{message.from_user.id}",
                                                                 data=f'lang_{lang_code}_{message.get_args()}', 
                                                                 message=message, 
