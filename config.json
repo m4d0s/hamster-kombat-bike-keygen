@@ -132,6 +132,28 @@
             ],
             "DISABLED": false,
             "ALGORITMV0": false
+        },
+        "ZOO": {
+            "NAME": "Zoopolis",
+            "APP_TOKEN": "b2436c89-e0aa-4aed-8046-9b0515e1c46b",
+            "PROMO_ID": "b2436c89-e0aa-4aed-8046-9b0515e1c46b",
+            "EVENTS_DELAY": [
+                20000,
+                25000
+            ],
+            "DISABLED": false,
+            "ALGORITMV0": false
+        },
+        "GANG": {
+            "NAME": "Gang Wars",
+            "APP_TOKEN": "b6de60a0-e030-48bb-a551-548372493523",
+            "PROMO_ID": "c7821fa7-6632-482c-9635-2bd5798585f9",
+            "EVENTS_DELAY": [
+                40000,
+                47000
+            ],
+            "DISABLED": false,
+            "ALGORITMV0": false
         }
     }
 }
