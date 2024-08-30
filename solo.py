@@ -22,7 +22,7 @@ async def new_key(session, game, pool):
         key = await get_key(session, game)
         if key:
             logger.info(f"Key for game {game} generated: {key}")
-            await insert_key_generation(user_id=config['DEV_ID'], key=key, key_type=game, pool=pool)
+            await insert_key_generation(user_id=config['DEV_ID'], key=key, key_type=game, pool=pool, used=False)
         else:
             logger.warning(f"Failed to generate key for game {game}")
     except Exception as e:
