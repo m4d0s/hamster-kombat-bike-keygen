@@ -15,7 +15,7 @@
     },
 
     "ru": {
-        "NAME": "Русский",
+        "NAME": "🇷🇺 Русский",
         "format_remaining_time": ["назад", "часов", "минут", "секунд", "дней"],
 
         "update_loadbar": ["Генерация ключа...", "Генерация ключа...\nСреднее время: ~{mins}", 
@@ -24,7 +24,7 @@
         "update_report" : ["Отправляем сообщения всем пользователям...", "Чат", "Канал", "Бот", "🛑 Остановить рассылку",
         "Массовая рассылка завершена успешно", "< Вернуться на главную"],
         "stop_process": ["Процесс остановлен", "Процесс был остановлен досрочно, можете вернуться в меню", "< Вернуться на главную"],
-        "send_language_choose": ["Выберите язык"],
+        "send_language_choose": ["Выберите язык, который вы хотите использовать для взаимодействия с ботом", "< Вернуться на главную"],
         "send_error_message" : ["< Вернуться на главную"],
         "send_report_example": ["Ответьте на сообщение, чтобы пожаловаться на других пользователей с кнопками (код-блоки для многоязыковых поддержки и html-форматирование поддерживаются)",
         "Пожалуйста, используйте символы ＜ и ＞ и ＆ в вашем сообщении вместо их оригиналов",
@@ -107,7 +107,7 @@
     },
     
     "en": {
-        "NAME": "English",
+        "NAME": "🇺🇸 English",
         "format_remaining_time": ["ago", "hours", "minutes", "seconds", "days"],
 
         "update_loadbar": ["Generating key...", "Generating key...\nAverage time: ~{mins}",
@@ -116,7 +116,7 @@
         "update_report" : ["Sending messages to all users...", "Chat", "Channel", "Bot", "🛑 Stop report", 
         "Mass-sending done sucessfully", "< Back to main"],
         "stop_process": ["Process stopped", "Process was stopped immediately, you can back to menu", "< Back to menu"],
-        "send_language_choose": ["Choose a language"],
+        "send_language_choose": ["Select the language you want to use to interact with the bot", "< Back to menu"],
         "send_error_message" : ["< Back to main"],
         "send_report_example": ["Reply to the message to report other users with buttons (code blocks for multilingual support and HTML formatting are supported)",
         "Please use the characters ＜ and ＞ and & in your message instead of their originals",

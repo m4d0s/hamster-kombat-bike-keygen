@@ -57,7 +57,7 @@ async def send_language_choose(message: types.Message) -> None:
     cache = await get_cached_data(message.chat.id) ##cache
     user = await get_user(message.chat.id, pool=POOL)
     logger.debug("User {user_id} started bot, lang: {lang}".format(user_id=message.chat.id, lang=message.from_user.language_code))
-    if not user and message.text.startswith('/language'):
+    if not user or message.text.startswith('/language'):
         lang_code = message.from_user.language_code
         if lang_code and lang_code in translate.keys() and not message.text.startswith('/language'):
             fake_callback = types.CallbackQuery(id=f"simulated_lang_{lang_code}_{message.from_user.id}",
@@ -67,18 +67,26 @@ async def send_language_choose(message: types.Message) -> None:
             fake_callback.from_user = message.from_user
             await process_callback_language(fake_callback)
             return
-        text = f"{translate[cache['lang']]['send_language_choose'][0]}\n"
+        text = snippet['bold'].format(text=translate[cache['lang']]['send_language_choose'][0]) #+ '\n'
+        
         keyboard = InlineKeyboardMarkup(row_width=2)
+        buttons = []
         for x in translate:
             inline_btn = InlineKeyboardButton(text=translate[x]["NAME"], callback_data=f'lang_{x}_{message.get_args()}')
-            keyboard.add(inline_btn)
+            buttons.append(inline_btn)
+        for i in range(0, len(buttons), 2):
+            keyboard.row(*buttons[i:i+2])
+        
+        if message.text.startswith('/language'):
+            keyboard.add(InlineKeyboardButton(text=translate[cache['lang']]['send_language_choose'][1], callback_data='main_menu'))
+            
         if cache['welcome']:
             await try_to_delete(chat_id=message.chat.id, message_id=cache['welcome'])
         WELCOME_MESS = await new_message(text=text, chat_id=message.chat.id, keyboard=keyboard)
         cache['welcome'] = WELCOME_MESS.message_id
     else:
         await send_welcome(message)
-        await insert_user(message.chat.id, message.from_user.username, ref=user['ref_id'], lang=cache['lang'], tg_lang=message.from_user.language_code, pool=POOL)
+        await insert_user(message.chat.id, message.from_user.username, ref=user['ref_id'] or 0, lang=cache['lang'] or 'en', tg_lang=message.from_user.language_code, pool=POOL)
     await delay(1000, "Language choose")
     await try_to_delete(chat_id=message.chat.id, message_id=message.message_id)
     await set_cached_data(message.chat.id, cache) ##write
