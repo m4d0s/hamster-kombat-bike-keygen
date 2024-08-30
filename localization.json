@@ -101,7 +101,7 @@
         "🗑 Удалить розыгрыш", "📥 Создать розыгрыш", "< Вернуться на главную"],
         "process_callback_giveaway": ["В разработке, ждите обновлений :)", "Розыгрыш \"{name}\"", "Призы для розыгрыша: ",
         "Генерируй ключи в нашем боте и получай 🎟", "К розыгрышам", "Ваши билеты в розыгрыше: {count} 🎟",
-        "Призов нету :(", "Закончится через: {time}", "Розыгрыш завершен"],
+        "Призов нету :(", "Закончится через: {time}", "Розыгрыш завершен", "🎁 Добавить призы", "Спонсор: ", "Победитель: "],
         "reply_to_giveaway":["Теперь напиши призы за участие в следующем формате (каждый на новой строке): ",
         "Имя вашего приза 1 (@sponsor1) [ссылка по желанию]\nИмя вашего приза 2 (@sponsor2) [ссылка по желанию]\nИмя вашего приза 3 (@sponsor3) [ссылка по желанию]"]
     },
@@ -194,7 +194,7 @@
         "roll_the_dice_by_keys": ["You just win the prize in the giveaway!"],
         "process_callback_giveaway": ["In development, stay tuned for updates :)", "Giveaway \"{name}\"", "Prizes for the giveaway: ",
         "Generate keys in our bot and get 🎟", "Back to active giveaways", "Your tickets here: {count} 🎟",
-        "No prizes :(", "Ends in: {time}", "Giveaway ended"],
+        "No prizes :(", "Ends in: {time}", "Giveaway ended", "🎁 Add prizes", "Sponsor: ", "Winner: "],
         "reply_to_giveaway":["Now write the prizes for the giveaway in the following format (each on a new line): ",
         "Name of prize 1 (@sponsor1) [link optional]\nName of prize 2 (@sponsor2) [link optional]\nName of prize 3 (@sponsor3) [link optional]"]
     }

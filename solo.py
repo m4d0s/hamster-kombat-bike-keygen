@@ -33,7 +33,7 @@ logger = get_logger()
 async def main():
     global MINING_POOL, logger
     config = await load_config('config.json')
-    events = [x for x in config['EVENTS']] if not config['DEBUG'] else [x for x in config['EVENTS'] if config['EVENTS'][x]['DISABLED']]
+    events = [x for x in config['EVENTS'] if not config['EVENTS'][x]['DISABLED']]
     limit = config['GEN_PROXY']
     semaphore = asyncio.Semaphore(limit)
     await get_pool()

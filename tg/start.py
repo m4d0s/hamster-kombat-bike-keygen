@@ -41,10 +41,13 @@ async def process_callback_main_menu(callback_query: types.CallbackQuery) -> Non
 async def start_pointer(message: types.Message) -> None:    
     if message.chat.type != types.ChatType.PRIVATE:
         return
-    if len(message.get_args()) == 1 and message.get_args()[0].isdigit() or len(message.get_args()) == 0:
+    arguments = list(message.get_args().split())
+    if len(arguments) == 1 and arguments[0].isdigit() or len(arguments) == 0:
         await send_language_choose(message)
-    elif len(message.get_args()) == 1 and message.get_args()[0].startswith('giveaway_'):
-        fake_callback = types.CallbackQuery(id=f"simulated_giveaway_{message.get_args()}", data=f'giveaway_{message.get_args()}', message=message, from_user=message.from_user)
+    elif len(arguments) == 1 and arguments[0].startswith('giveaway_'):
+        fake_callback = types.CallbackQuery(id=f"simulated_{arguments[0]}",
+                                            data=f'{arguments[0]}', message=message,
+                                            from_user=message.from_user)
         await process_callback_giveaway(fake_callback)     
 
 @dp.message_handler(commands=['language'])    

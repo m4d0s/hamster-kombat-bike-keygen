@@ -124,11 +124,15 @@ async def process_callback_generate_tasks(callback_query: types.CallbackQuery) -
         keyboard.add(inline_btn)
         
     if request_level(cache['right'], 4, message.chat.id): # 4 - add_task
-        keyboard.add(InlineKeyboardButton(text=translate[cache['lang']]['process_callback_generate_tasks'][5], callback_data='delete_task'),
-                     InlineKeyboardButton(text=translate[cache['lang']]['process_callback_generate_tasks'][4], callback_data='add_task'))
+        keyboard.add(InlineKeyboardButton(text=translate[cache['lang']]['process_callback_generate_tasks'][5], 
+                                          callback_data='delete_task'),
+                     InlineKeyboardButton(text=translate[cache['lang']]['process_callback_generate_tasks'][4], 
+                                          callback_data='add_task'))
     else:
-        keyboard.add(InlineKeyboardButton(text=translate[cache['lang']]['process_callback_generate_tasks'][4], callback_data='add_task'))
-    keyboard.add(InlineKeyboardButton(text=translate[cache['lang']]['process_callback_generate_tasks'][3], callback_data='main_menu'))
+        keyboard.add(InlineKeyboardButton(text=translate[cache['lang']]['process_callback_generate_tasks'][4], 
+                                          callback_data='add_task'))
+    keyboard.add(InlineKeyboardButton(text=translate[cache['lang']]['process_callback_generate_tasks'][3], 
+                                      callback_data='main_menu'))
 
 
     WELCOME_MESS = await new_message(text=text, chat_id=message.chat.id, keyboard=keyboard)
@@ -298,21 +302,25 @@ async def send_task_example(message: types.Message, task_type='task') -> None:
             snippet['bold'].format(text=translate[cache['lang']]['send_task_example'][0]) if task_type == 'task' \
                 else snippet['bold'].format(text=translate[cache['lang']]['send_task_example'][10]),
             snippet['code-block'].format(text=translate[cache['lang']]['send_task_example'][1], lang=cache['lang']) if task_type == 'task' \
-                else snippet['code-block'].format(text=translate[cache['lang']]['send_task_example'][11].format(date=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")), lang=cache['lang']),
+                else snippet['code-block'].format(text=translate[cache['lang']]['send_task_example'][11]
+                                            .format(date=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")), lang=cache['lang']),
             snippet['italic'].format(text=translate[cache['lang']]['send_task_example'][2]) if task_type == 'task' \
                 else snippet['italic'].format(text=translate[cache['lang']]['send_task_example'][12]),
         ]) + "\n\n"
 
         if task_type == 'task':
             text += translate[cache['lang']]['send_task_example'][6] + "\n" + \
-                    snippet['bold'].format(text=translate[cache['lang']]['send_task_example'][7].replace("{bot}", BOT_INFO.username))
+                    snippet['bold'].format(text=translate[cache['lang']]['send_task_example'][7]
+                                    .replace("{bot}", BOT_INFO.username))
 
         if cache['addtask']:
             await try_to_delete(chat_id=message.chat.id, message_id=cache['addtask'])
         if task_type == 'task':
-            key = InlineKeyboardMarkup().add(InlineKeyboardButton(translate[cache['lang']]['send_task_example'][14], callback_data='generate_tasks'))
+            key = InlineKeyboardMarkup().add(InlineKeyboardButton(translate[cache['lang']]['send_task_example'][14], 
+                                                                  callback_data='generate_tasks'))
         elif task_type == 'giveaway':
-            key = InlineKeyboardMarkup().add(InlineKeyboardButton(translate[cache['lang']]['send_task_example'][13], callback_data='giveaways'))
+            key = InlineKeyboardMarkup().add(InlineKeyboardButton(translate[cache['lang']]['send_task_example'][13], 
+                                                                  callback_data='giveaways'))
         ADDTASK_MESS = await new_message(chat_id=message.chat.id, text=text, keyboard=key)
         cache['addtask'] = ADDTASK_MESS.message_id
         await set_cached_data(message.chat.id, cache)  ##write
@@ -328,7 +336,8 @@ async def reply_to_task(message: types.Message, task_type='task') -> None:
         or not request_level(cache['right'], 4, message.chat.id): # 4 - add_task
         return
     control = 1
-    transl_task = re.findall(r'<pre>```(\w+)\n(.*?)\n```<\/pre>|<pre><code class="language-(\w+)">(.*?)<\/code><\/pre>', message.html_text, re.DOTALL)
+    transl_task = re.findall(r'<pre>```(\w+)\n(.*?)\n```<\/pre>|<pre><code class="language-(\w+)">(.*?)<\/code><\/pre>', 
+                             message.html_text, re.DOTALL)
 
     if not transl_task:
         await send_error_message(message.chat.id, translate[cache['lang']]['send_task_example'][3])
@@ -341,7 +350,8 @@ async def reply_to_task(message: types.Message, task_type='task') -> None:
         content = content1 or __
         task_match = re.findall(r'\[(.+?)\]\[(.+?)\]', content, re.DOTALL)
         namespaces = [task_match[i][0].lower() for i in range(len(task_match))]
-        if 'name' not in namespaces or 'desc' not in namespaces or ('link' not in namespaces and 'id' not in namespaces and task_type == 'task'):
+        if 'name' not in namespaces or 'desc' not in namespaces \
+            or ('link' not in namespaces and 'id' not in namespaces and task_type == 'task'):
             await send_error_message(message.chat.id, translate[cache['lang']]['send_task_example'][3])
             await try_to_delete(message.chat.id, message.message_id)
             return
@@ -350,9 +360,13 @@ async def reply_to_task(message: types.Message, task_type='task') -> None:
             
             if task_type == 'task':
                 slash_sep = dict_task[lang]['link'].split('/') if 'link' in dict_task[lang] else dict_task[lang]['id']
-                what_to_check = dict_task[lang]['id'] if 'id' in dict_task[lang] else dict_task[lang]['check_id'] if 'check_id' in dict_task[lang] \
-                    else slash_sep[3] if 'link' in dict_task[lang] and len(slash_sep) > 3 and any(x not in dict_task[lang]['link'] for x in ['/+', 'joinchat']) and username_valid(slash_sep[3]) \
-                    else dict_task[lang]['link'] if 'link' in dict_task[lang] and dict_task[lang]['link'].startswith('@') and username_valid(dict_task[lang]['link'][1:]) \
+                what_to_check = dict_task[lang]['id'] if 'id' in dict_task[lang] \
+                    else dict_task[lang]['check_id'] if 'check_id' in dict_task[lang] \
+                    else slash_sep[3] if 'link' in dict_task[lang] and len(slash_sep) > 3 \
+                        and any(x not in dict_task[lang]['link'] for x in ['/+', 'joinchat']) \
+                            and username_valid(slash_sep[3]) \
+                    else dict_task[lang]['link'] if 'link' in dict_task[lang] \
+                        and dict_task[lang]['link'].startswith('@') and username_valid(dict_task[lang]['link'][1:]) \
                     else None
                 if what_to_check:
                     try:
@@ -371,12 +385,15 @@ async def reply_to_task(message: types.Message, task_type='task') -> None:
                         control = 0
                         dict_task[lang]['check_id'] = BOT_INFO.id
                     except Exception as e:
-                        await send_error_message(message.chat.id, translate[cache['lang']]['send_task_example'][3] + f"\nError: {str(e)}", e)
+                        await send_error_message(message.chat.id, translate[cache['lang']]['send_task_example'][3] +\
+                            f"\nError: {str(e)}", e)
                         await try_to_delete(message.chat.id, message.message_id)
                         return
                 else:
                     if 'link' not in dict_task[lang]:
-                        await send_error_message(message.chat.id, translate[cache['lang']]['send_task_example'][3] + f"\nError: {translate[cache['lang']]['send_task_example'][9]}", Exception(translate[cache['lang']]['send_task_example'][9]))
+                        await send_error_message(message.chat.id, translate[cache['lang']]['send_task_example'][3] +\
+                            f"\nError: {translate[cache['lang']]['send_task_example'][9]}", 
+                            Exception(translate[cache['lang']]['send_task_example'][9]))
                         await try_to_delete(message.chat.id, message.message_id)
                         return
                     control = 0
@@ -387,7 +404,8 @@ async def reply_to_task(message: types.Message, task_type='task') -> None:
                 iso_date = 'T'.join(dict_task[lang]['date'].split())+'Z'
                 dict_task[lang]['expire'] = int(datetime.fromisoformat(iso_date).astimezone(timezone.utc).timestamp())
                 if dict_task[lang]['expire'] < now():
-                    await send_error_message(message.chat.id, translate[cache['lang']]['send_task_example'][3] + f'\nError: now less then expire ({iso_date} less then {datetime.now().isoformat()})')
+                    await send_error_message(message.chat.id, translate[cache['lang']]['send_task_example'][3] +\
+                        f'\nError: now less then expire ({iso_date} less then {datetime.now().isoformat()})')
                     return
                 
             if first:

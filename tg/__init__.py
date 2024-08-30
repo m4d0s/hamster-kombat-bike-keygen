@@ -18,7 +18,7 @@ for module in modules:
 
 # Импортируем модули
 for module_name in keys:
-    __import__(f'{module_name}', globals(), locals(), level=1)
+    __import__(module_name, globals(), locals(), level=1)
 
 # Определяем __all__ для управления экспортом
 __all__ = keys

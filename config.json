@@ -31,6 +31,7 @@
                 20000,
                 25000
             ],
+            "ALGORITMV0": true,
             "DISABLED": true
         },
         "CUBE": {
@@ -41,7 +42,8 @@
                 20000,
                 25000
             ],
-            "DISABLED": false
+            "DISABLED": false,
+            "ALGORITMV0": false
         },
         "TRAIN": {
             "NAME": "Train Miner",
@@ -51,7 +53,8 @@
                 120000,
                 125000
             ],
-            "DISABLED": false
+            "DISABLED": false,
+            "ALGORITMV0": true
         },
         "CLONE": {
             "NAME": "My Clone Army",
@@ -61,7 +64,8 @@
                 120000,
                 125000
             ],
-            "DISABLED": false
+            "DISABLED": false,
+            "ALGORITMV0": true
         },
         "MERGE": {
             "NAME": "Merge Away",
@@ -71,7 +75,8 @@
                 20000,
                 25000
             ],
-            "DISABLED": false
+            "DISABLED": false,
+            "ALGORITMV0": false
         },
         "TWERK": {
             "NAME": "Twerk Race",
@@ -81,7 +86,8 @@
                 20000,
                 25000
             ],
-            "DISABLED": false
+            "DISABLED": false,
+            "ALGORITMV0": false
         },
         "POLY": {
             "NAME": "Polysphere",
@@ -91,7 +97,8 @@
                 20000,
                 25000
             ],
-            "DISABLED": true
+            "DISABLED": false,
+            "ALGORITMV0": true
         },
         "MAT": {
             "NAME": "Mow and Trim",
@@ -101,7 +108,8 @@
                 20000,
                 25000
             ],
-            "DISABLED": true
+            "DISABLED": false,
+            "ALGORITMV0": true
         },
         "MUD": {
             "NAME": "Mud Racing",
@@ -111,7 +119,8 @@
                 20000,
                 25000
             ],
-            "DISABLED": true
+            "DISABLED": true,
+            "ALGORITMV0": true
         },
         "CAFE": {
             "NAME": "Cafe Dash",
@@ -121,7 +130,8 @@
                 20000,
                 25000
             ],
-            "DISABLED": false
+            "DISABLED": false,
+            "ALGORITMV0": false
         }
     }
 }

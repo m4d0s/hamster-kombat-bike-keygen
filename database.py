@@ -189,16 +189,29 @@ async def insert_task(task: dict, check: int = 1, task_type: str = 'task', expir
     async with pool.acquire() as conn:
         async with conn.transaction():
             # Insert or update the main task record
-            record = await conn.fetchrow(
+            id = await conn.fetchval(
                 f'''
-                INSERT INTO "{SCHEMAS["PROMOTION"]}".promo (name, "desc", link, check_id, control, type, time, expire) 
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                RETURNING id
+                SELECT id FROM "{SCHEMAS["PROMOTION"]}".promo
+                WHERE name = $1 AND type = $2 and check_id = $3
+                LIMIT 1
                 ''',
-                task['name'], task['desc'], task['link'], task['check_id'], check, task_type, now(), task['expire']
+                task['name'], task_type, task['check_id']
             )
+            id = id or None
             
-            task_id = record['id']
+            if not id:
+                record = await conn.fetchrow(
+                    f'''
+                    INSERT INTO "{SCHEMAS["PROMOTION"]}".promo (name, "desc", link, check_id, control, type, time, expire) 
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    RETURNING id
+                    ''',
+                    task['name'], task['desc'], task['link'], task['check_id'], check, task_type, now(), task['expire']
+                )
+            
+                task_id = record['id']
+            else:
+                task_id = id
             
             # Insert or update translations
             for lang, translations in task.items():

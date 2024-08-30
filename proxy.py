@@ -82,7 +82,8 @@ async def get_free_proxy(pool=POOL):
     if json_config['IPV6_PORT'] > 0:
         ipv6_address = generate_alternative_ipv6()
         if ipv6_address and ipv6_address[3] != 0:
-            return {'link': f'http://[{ipv6_address[1]}]:{ipv6_address[3]}', 'work': False, 'version': 'ipv6'}
+            return {'link': f'http://[{ipv6_address[1]}]', #:{ipv6_address[3]}', 
+                    'work': False,    'version': 'ipv6'}
         
 
     async with pool.acquire() as conn:

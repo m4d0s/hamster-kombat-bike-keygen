@@ -122,59 +122,71 @@ async def fetch_api(session: aiohttp.ClientSession, path: str, body: dict, auth:
         error_text =  str(e)
         logger.error(f'Error fetch_api: {error_text}')
 
+def generate_debug_key() -> str:
+    symbols = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ'
+    return config['DEBUG_KEY'] + '-' + ''.join(random.choice(symbols) for _ in range(10))
+
 async def get_key(session, game_key, pool=None):
     
     logger.debug(f'Fetching {game_key}...')
     proxy = await get_free_proxy(pool)
-        
-    try:
-        game_config = config['EVENTS'][game_key]
-        delay_ms = random.randint(config['EVENTS'][game_key]['EVENTS_DELAY'][0], config['EVENTS'][game_key]['EVENTS_DELAY'][1]) if not config['EVENTS'][game_key]['DISABLED'] \
-                    else random.randint(1000, 2000)
-        attempts = config['MAX_RETRY'] if not config['EVENTS'][game_key]['DISABLED'] else config['MAX_RETRY'] * 2
-        client_id = str(uuid.uuid4())
-
-        body = {
-            'appToken': game_config['APP_TOKEN'],
-            'clientId': client_id,
-            'clientOrigin': ['ios', 'android'].pop(random.randint(0, 1))
-        }
-        login_client_data = await fetch_api(session, '/promo/login-client', body, proxy=proxy)
-        await delay(delay_ms, "Login delay")
-        
-        if not login_client_data:
-            raise Exception("Failed to login: no data")
-        auth_token = login_client_data['clientToken']
-        promo_code = None
-
-        for attempt in range(attempts):
-            # delay(config['DELAY'] * 1000)
-            logger.debug(f"Attempt {attempt + 1} of {attempts} for {game_key}...")
-            body = {
-                'promoId': game_config['PROMO_ID'],
-                'eventId': str(uuid.uuid4()),
-                'eventOrigin': 'undefined'
-            }
-            register_event_data = await fetch_api(session, '/promo/register-event', body, auth_token, proxy=proxy)
-
-            if register_event_data and not register_event_data.get('hasCode'):
-                await delay(delay_ms, "Event delay")
-                continue
+    promo_code = None
+    
+    if config['DEBUG']:
+        promo_code = generate_debug_key()
+        game_key = config['DEBUG_GAME']
+        await asyncio.sleep((random.random() * 5) + 5)
+    
+    else:   
+        try:
+            game_config = config['EVENTS'][game_key]
+            delay_ms = random.randint(config['EVENTS'][game_key]['EVENTS_DELAY'][0], config['EVENTS'][game_key]['EVENTS_DELAY'][1]) \
+                if not config['EVENTS'][game_key]['ALGORITMV0'] \
+                        else random.randint(1000, 2000)
+            attempts = config['MAX_RETRY'] if not config['EVENTS'][game_key]['ALGORITMV0'] \
+                    else config['MAX_RETRY'] * 2
+            client_id = str(uuid.uuid4())
 
             body = {
-                'promoId': game_config['PROMO_ID'],
+                'appToken': game_config['APP_TOKEN'],
+                'clientId': client_id,
+                'clientOrigin': ['ios', 'android'].pop(random.randint(0, 1))
             }
-            create_code_data = await fetch_api(session, '/promo/create-code', body, auth_token, proxy=proxy)
+            login_client_data = await fetch_api(session, '/promo/login-client', body, proxy=proxy)
+            await delay(delay_ms, "Login delay")
+            
+            if not login_client_data:
+                raise Exception("Failed to login: no data")
+            auth_token = login_client_data['clientToken']
+            
+            for attempt in range(attempts):
+                # delay(config['DELAY'] * 1000)
+                logger.debug(f"Attempt {attempt + 1} of {attempts} for {game_key}...")
+                body = {
+                    'promoId': game_config['PROMO_ID'],
+                    'eventId': str(uuid.uuid4()),
+                    'eventOrigin': 'undefined'
+                }
+                register_event_data = await fetch_api(session, '/promo/register-event', body, auth_token, proxy=proxy)
 
-            if create_code_data and 'promoCode' in create_code_data:
-                promo_code = create_code_data.get('promoCode')
-                if promo_code:
-                    break
+                if register_event_data and not register_event_data.get('hasCode'):
+                    await delay(delay_ms, "Event delay")
+                    continue
 
-            await delay(delay_ms, "Code delay")
-    except Exception as e:
-        logger.error(f'Error get_key: {e}')
-    finally:
-        await set_proxy({proxy['link']: False}, pool=pool)
+                body = {
+                    'promoId': game_config['PROMO_ID'],
+                }
+                create_code_data = await fetch_api(session, '/promo/create-code', body, auth_token, proxy=proxy)
 
-    return promo_code
+                if create_code_data and 'promoCode' in create_code_data:
+                    promo_code = create_code_data.get('promoCode')
+                    if promo_code:
+                        break
+
+                await delay(delay_ms, "Code delay")
+        except Exception as e:
+            logger.error(f'Error get_key: {e}')
+        finally:
+            await set_proxy({proxy['link']: False}, pool=pool)
+
+    return promo_code or None
