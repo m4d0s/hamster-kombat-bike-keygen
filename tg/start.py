@@ -118,8 +118,7 @@ async def send_welcome(message: types.Message) -> None:
 
         
     if not cache['process']:
-        inline_kb.add(InlineKeyboardMarkup()
-                      .add(InlineKeyboardButton(text=translate[cache['lang']]['send_welcome'][17], callback_data="stop_process")))
+        inline_kb.add(InlineKeyboardButton(text=translate[cache['lang']]['send_welcome'][17], callback_data="stop_process"))
         
     today_keys = await get_all_user_keys_24h(user_id=message.chat.id, pool=POOL)
     user_limit_keys, global_limit_keys = await get_key_limit(user=message.chat.id)
