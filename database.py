@@ -296,10 +296,10 @@ async def insert_task(task: dict, check: int = 1, task_type: str = 'task', expir
             id = await conn.fetchval(
                 f'''
                 SELECT id FROM "{SCHEMAS["PROMOTION"]}".promo
-                WHERE name = $1 AND type = $2 AND check_id = $3
+                WHERE check_id = $1
                 LIMIT 1
                 ''',
-                task['name'], task_type, task['check_id']
+                task['check_id']
             )
             
             if not id:

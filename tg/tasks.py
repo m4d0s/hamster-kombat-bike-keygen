@@ -353,16 +353,17 @@ async def reply_to_task(message: types.Message, task_type='task') -> None:
         return_dict = {'control':1}
         what_to_check = "@" + source.split('/')[3] if len(source.split('/')) > 3 and isinstance(source, str) and username_valid(source.split('/')[3]) \
                     and not any(x not in source for x in ['/+', 'joinchat'])\
-                    else source if isinstance(source, str) and source.startswith('@') and username_valid(source[1:]) or isinstance(source, int)\
+                    else source if isinstance(source, str) and source.startswith('@') and username_valid(source[1:])\
+                    else int(source) if isinstance(source, int) or (source[1:].isdigit() if source.startswith('-') else source.isdigit())\
                     else None
         if what_to_check:
             try:
                 checker = await bot.get_chat(what_to_check)
                 return_dict['check_id'] = checker.id
-                if not checker.invite_link and checker.permissions.can_invite_users:
+                if not checker.invite_link and (checker.permissions and checker.permissions.can_invite_users):
                     await checker.create_invite_link()
-                elif not checker.invite_link:
-                    raise Exception(f'No invite link, recheck permissions of bot in chat {checker.mention} ({checker.id})')
+                # elif not checker.invite_link:
+                #     raise Exception(f'No invite link, recheck permissions of bot in chat {checker.mention} ({checker.id})')
                 else:    
                     return_dict['link'] = checker.invite_link or 'https://t.me/' + checker.username
                     if not return_dict['link'].startswith('https://t.me/'):
@@ -370,7 +371,7 @@ async def reply_to_task(message: types.Message, task_type='task') -> None:
             except ChatNotFound:
                 logger.warning(f"Chat ({what_to_check}) not found")
                 return_dict['control'] = 0
-                return_dict['check_id'] = BOT_INFO.id
+                return_dict['check_id'] = int(f'-333{now()}')
             except Exception as e:
                 await send_error_message(message.chat.id, translate[cache['lang']]['send_task_example'][3] + f"\nError: {str(e)}", e)
                 await try_to_delete(message.chat.id, message.message_id)
