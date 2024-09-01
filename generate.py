@@ -107,7 +107,8 @@ async def fetch_api(session: aiohttp.ClientSession, path: str, body: dict, auth:
 
             if not res.ok:
                 await delay(config['DELAY'] * 1000, "API error")
-                await set_proxy({proxy['link']: False})
+                if not proxy['version'] == 'ipv6':
+                    await set_proxy({proxy['link']: False})
                 if str(res.status) == '400':
                     logger.debug(f'Response: {res.status} {res.reason}')
                 else:
@@ -143,8 +144,8 @@ async def get_key(session, game_key, pool=None):
             delay_ms = random.randint(config['EVENTS'][game_key]['EVENTS_DELAY'][0], config['EVENTS'][game_key]['EVENTS_DELAY'][1]) \
                 if not config['EVENTS'][game_key]['ALGORITMV0'] \
                         else random.randint(1000, 2000)
-            attempts = config['MAX_RETRY'] if not config['EVENTS'][game_key]['ALGORITMV0'] \
-                    else config['MAX_RETRY'] * 2
+            attempts = game_config['RETRY'] if not config['EVENTS'][game_key]['ALGORITMV0'] \
+                        else config['V0_RETRY']
             client_id = str(uuid.uuid4())
 
             body = {
@@ -187,6 +188,7 @@ async def get_key(session, game_key, pool=None):
         except Exception as e:
             logger.error(f'Error get_key: {e}')
         finally:
-            await set_proxy({proxy['link']: False}, pool=pool)
+            if not proxy['version'] == 'ipv6':
+                await set_proxy({proxy['link']: False}, pool=pool)
 
     return promo_code or None

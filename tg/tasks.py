@@ -7,6 +7,7 @@ from aiogram.utils.exceptions import (ChatNotFound,BadRequest)
 
 from .message import send_error_message, new_message, try_to_delete
 from .cache import get_cached_data, set_cached_data
+from .process import update_report
 
 from c_telegram import dp, BOT_INFO, bot, snippet, translate, POOL, request_level, db_config
 from generate import get_logger
@@ -20,6 +21,9 @@ def username_valid(username:str) -> bool:
     return all(i in symbols for i in username) \
             and 4 <= len(username) <= 32 \
             and not (username[0].isdigit() or username[0] == '_')
+
+def get_arg_link(id, arg='giveaway'):
+    return f'https://t.me/{BOT_INFO.username}?start={arg}_{str(id)}'
 
 # Tasks funcs
 async def check_completed_tasks(user_id:int):
@@ -137,13 +141,12 @@ async def process_callback_generate_tasks(callback_query: types.CallbackQuery) -
 
     WELCOME_MESS = await new_message(text=text, chat_id=message.chat.id, keyboard=keyboard)
     cache['welcome'] = WELCOME_MESS.message_id
-    await try_to_delete(chat_id=message.chat.id, message_id=message.message_id)
     
     await set_cached_data(message.chat.id, cache) ##write
     
 @dp.callback_query_handler(lambda c: c.data.startswith('generate_task_'))
 async def generate_task_message(callback_query: types.CallbackQuery) -> None:
-    user_id = callback_query.from_user.id
+    user_id = callback_query.message.chat.id
     task_id = str(callback_query.data.replace('generate_task_', ''))
     
     # Получаем данные из кэша и проверяем задания
@@ -202,9 +205,12 @@ async def generate_task_message(callback_query: types.CallbackQuery) -> None:
     keyboard.add(
         InlineKeyboardButton(text=but_text, callback_data=f'check_task_{task_id}'),
         InlineKeyboardButton(text=translate[cache['lang']]['generate_task_message'][5], url=current_task['link']),
-        InlineKeyboardButton(text=translate[cache['lang']]['generate_task_message'][2], callback_data='generate_tasks')
     )
-    
+    # if callback_query.id.startswith('from_'):
+    #     id = callback_query.id.split('_')[2]
+    #     keyboard.add(InlineKeyboardButton(text=translate[cache['lang']]['generate_task_message'][2], callback_data=f'giveaway_{id}'))
+    # else:
+    keyboard.add(InlineKeyboardButton(text=translate[cache['lang']]['generate_task_message'][2], callback_data='generate_tasks'))
     # Удаляем старое сообщение и отправляем новое
     if cache.get('welcome'):
         await try_to_delete(chat_id=message.chat.id, message_id=cache['welcome'])
@@ -343,6 +349,42 @@ async def reply_to_task(message: types.Message, task_type='task') -> None:
         await send_error_message(message.chat.id, translate[cache['lang']]['send_task_example'][3])
         return
     
+    async def check_source(source:str|int):
+        return_dict = {'control':1}
+        what_to_check = "@" + source.split('/')[3] if len(source.split('/')) > 3 and isinstance(source, str) and username_valid(source.split('/')[3]) \
+                    and not any(x not in source for x in ['/+', 'joinchat'])\
+                    else source if isinstance(source, str) and source.startswith('@') and username_valid(source[1:]) or isinstance(source, int)\
+                    else None
+        if what_to_check:
+            try:
+                checker = await bot.get_chat(what_to_check)
+                return_dict['check_id'] = checker.id
+                if not checker.invite_link and checker.permissions.can_invite_users:
+                    await checker.create_invite_link()
+                elif not checker.invite_link:
+                    raise Exception(f'No invite link, recheck permissions of bot in chat {checker.mention} ({checker.id})')
+                else:    
+                    return_dict['link'] = checker.invite_link or 'https://t.me/' + checker.username
+                    if not return_dict['link'].startswith('https://t.me/'):
+                        logger.warning(f"Not invite link ({source}) for chat ({what_to_check})")
+            except ChatNotFound:
+                logger.warning(f"Chat ({what_to_check}) not found")
+                return_dict['control'] = 0
+                return_dict['check_id'] = BOT_INFO.id
+            except Exception as e:
+                await send_error_message(message.chat.id, translate[cache['lang']]['send_task_example'][3] + f"\nError: {str(e)}", e)
+                await try_to_delete(message.chat.id, message.message_id)
+                return
+        else:
+            if 'link' not in return_dict:
+                await send_error_message(message.chat.id, translate[cache['lang']]['send_task_example'][3] + f"\nError: {translate[cache['lang']]['send_task_example'][9]}", 
+                                        Exception(translate[cache['lang']]['send_task_example'][9]))
+                await try_to_delete(message.chat.id, message.message_id)
+                return
+            return_dict['control'] = 0
+        return return_dict
+        
+    
     first = True
     dict_task = {}
     for lang, content1, _, __ in transl_task:
@@ -359,48 +401,16 @@ async def reply_to_task(message: types.Message, task_type='task') -> None:
             dict_task[lang] = {t[0].lower(): t[1] for t in task_match}  
             
             if task_type == 'task':
-                slash_sep = dict_task[lang]['link'].split('/') if 'link' in dict_task[lang] else dict_task[lang]['id']
-                what_to_check = dict_task[lang]['id'] if 'id' in dict_task[lang] \
-                    else dict_task[lang]['check_id'] if 'check_id' in dict_task[lang] \
-                    else slash_sep[3] if 'link' in dict_task[lang] and len(slash_sep) > 3 \
-                        and any(x not in dict_task[lang]['link'] for x in ['/+', 'joinchat']) \
-                            and username_valid(slash_sep[3]) \
-                    else dict_task[lang]['link'] if 'link' in dict_task[lang] \
-                        and dict_task[lang]['link'].startswith('@') and username_valid(dict_task[lang]['link'][1:]) \
-                    else None
+                what_to_check = dict_task[lang].get('id', None) or dict_task[lang].get('link', None)
                 if what_to_check:
-                    try:
-                        checker = await bot.get_chat(what_to_check)
-                        dict_task[lang]['check_id'] = checker.id
-                        if not checker.invite_link and checker.permissions.can_invite_users:
-                            await checker.create_invite_link()
-                        elif not checker.invite_link:
-                            raise Exception(f'No invite link, recheck permissions of bot in chat {checker.mention} ({checker.id})')
-                        else:    
-                            dict_task[lang]['link'] = checker.invite_link or 'https://t.me/' + checker.username
-                            if not dict_task[lang]['link'].startswith('https://t.me/'):
-                                logger.warning(f"Not invite link ({dict_task[lang]['link']}) for chat ({what_to_check})")
-                    except ChatNotFound:
-                        logger.warning(f"Chat ({what_to_check}) not found")
-                        control = 0
-                        dict_task[lang]['check_id'] = BOT_INFO.id
-                    except Exception as e:
-                        await send_error_message(message.chat.id, translate[cache['lang']]['send_task_example'][3] +\
-                            f"\nError: {str(e)}", e)
-                        await try_to_delete(message.chat.id, message.message_id)
-                        return
-                else:
-                    if 'link' not in dict_task[lang]:
-                        await send_error_message(message.chat.id, translate[cache['lang']]['send_task_example'][3] +\
-                            f"\nError: {translate[cache['lang']]['send_task_example'][9]}", 
-                            Exception(translate[cache['lang']]['send_task_example'][9]))
-                        await try_to_delete(message.chat.id, message.message_id)
-                        return
-                    control = 0
+                    link_data = await check_source(what_to_check)
+                    for k,v in link_data.items():
+                        dict_task[lang][k] = v
+                    
             elif task_type == 'giveaway':
                 control = 0
-                dict_task[lang]['check_id'] = BOT_INFO.id
-                dict_task[lang]['link'] = 'https://t.me/' + BOT_INFO.username
+                dict_task[lang]['check_id'] = int(f'-999{now()}')
+                dict_task[lang]['link'] = ""
                 iso_date = 'T'.join(dict_task[lang]['date'].split())+'Z'
                 dict_task[lang]['expire'] = int(datetime.fromisoformat(iso_date).astimezone(timezone.utc).timestamp())
                 if dict_task[lang]['expire'] < now():
@@ -425,6 +435,9 @@ async def reply_to_task(message: types.Message, task_type='task') -> None:
     cache['task_id'] = dict_task['id']
     await try_to_delete(message.chat.id, message.message_id)
     if task_type == 'task':
+        text = {x:translate[x]['reply_to_task'][1].format(name=dict_task[x]['name']) for x in translate}
+        keyboard = InlineKeyboardMarkup().add(InlineKeyboardButton(text=translate[cache['lang']]['reply_to_task'][2], url=get_arg_link(dict_task['id'], arg='task')))
+        await update_report(chat_id=message.chat.id, text=text, keyboard=keyboard, warning=True)
         addm = await new_message(chat_id=message.chat.id, text=translate[cache['lang']]['send_task_example'][4], keyboard=keyboard)
         cache['addtask'] = addm.message_id
     await set_cached_data(message.chat.id, cache)

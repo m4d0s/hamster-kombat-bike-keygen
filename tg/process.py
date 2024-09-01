@@ -20,9 +20,11 @@ async def update_loadbar(chat_id: int, game_key: str, session: aiohttp.ClientSes
     cache['process'] = False
     await set_cached_data(chat_id, cache)
 
-    event_delay = json_config['EVENTS'][game_key]['EVENTS_DELAY']
-    sec = event_delay[0] * (1 + db_config["MAX_RETRY"] * 2) // 1000 // 3 * count
-    max_sec = event_delay[1] * (1 + db_config["MAX_RETRY"] * 2) // 1000 * count
+    event = json_config['EVENTS'][game_key]
+    event_delay = event['EVENTS_DELAY']
+    retry_num = event['RETRY'] if not event['ALGORITMV0'] else json_config['V0_RETRY']
+    sec = event_delay[0] * (1 + retry_num * 2) // 1000 // 2 * count
+    max_sec = event_delay[1] * (1 + retry_num * 2) // 1000 * count
 
     if json_config['DEBUG']:
         sec = json_config['DEBUG_DELAY'] // 1000 

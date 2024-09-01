@@ -4,7 +4,7 @@
     "MAIN_GROUP": 0,
     "MAIN_CHANNEL": 0,
     "DELAY": 30,
-    "MAX_RETRY": 15,
+    "V0_RETRY": 25,
     "MINING": true,
     "DB": "postgresql://postgres:password@127.0.0.1:5432/postgres",
     "MINING_DB": "postgresql://postgres:password@127.0.0.1:5432/postgres",
@@ -15,7 +15,7 @@
     "DEBUG_GAME": "C0D3",
     "GEN_PROXY": 40,
     "IPV6": "::1",
-    "IPV6_PORT": 0,
+    "IPV6_PORT": 10391,
     "PROXY": [],
     "SCHEMAS": {
         "HAMSTER": "hamster-kombat-keys",
@@ -31,6 +31,7 @@
                 20000,
                 25000
             ],
+            "RETRY": 13,
             "ALGORITMV0": true,
             "DISABLED": true
         },
@@ -42,6 +43,7 @@
                 20000,
                 25000
             ],
+            "RETRY": 13,
             "DISABLED": false,
             "ALGORITMV0": false
         },
@@ -53,6 +55,7 @@
                 120000,
                 125000
             ],
+            "RETRY": 3,
             "DISABLED": false,
             "ALGORITMV0": true
         },
@@ -64,8 +67,9 @@
                 120000,
                 125000
             ],
-            "DISABLED": false,
-            "ALGORITMV0": true
+            "RETRY": 3,
+            "DISABLED": true,
+            "ALGORITMV0": false
         },
         "MERGE": {
             "NAME": "Merge Away",
@@ -75,6 +79,7 @@
                 20000,
                 25000
             ],
+            "RETRY": 13,
             "DISABLED": false,
             "ALGORITMV0": false
         },
@@ -86,6 +91,7 @@
                 20000,
                 25000
             ],
+            "RETRY": 13,
             "DISABLED": false,
             "ALGORITMV0": false
         },
@@ -97,8 +103,9 @@
                 20000,
                 25000
             ],
+            "RETRY": 13,
             "DISABLED": false,
-            "ALGORITMV0": true
+            "ALGORITMV0": false
         },
         "MAT": {
             "NAME": "Mow and Trim",
@@ -108,6 +115,7 @@
                 20000,
                 25000
             ],
+            "RETRY": 13,
             "DISABLED": false,
             "ALGORITMV0": true
         },
@@ -119,6 +127,7 @@
                 20000,
                 25000
             ],
+            "RETRY": 13,
             "DISABLED": true,
             "ALGORITMV0": true
         },
@@ -130,6 +139,7 @@
                 20000,
                 25000
             ],
+            "RETRY": 13,
             "DISABLED": false,
             "ALGORITMV0": false
         },
@@ -141,6 +151,7 @@
                 20000,
                 25000
             ],
+            "RETRY": 13,
             "DISABLED": false,
             "ALGORITMV0": false
         },
@@ -152,6 +163,7 @@
                 40000,
                 47000
             ],
+            "RETRY": 7,
             "DISABLED": false,
             "ALGORITMV0": false
         }

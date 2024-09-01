@@ -163,9 +163,8 @@ cython_debug/
 sqlite.db
 bot.log
 tempCodeRunnerFile.py
-
+proxy.txt
 reserve.json
-config.json
 references/
 sql/dumps
 #test.py

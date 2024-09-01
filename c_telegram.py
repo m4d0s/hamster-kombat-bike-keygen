@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import tg  # noqa: F401
 
 from aiogram import Bot, Dispatcher
@@ -37,7 +38,7 @@ async def reload_config(config_path='config.json', pool=POOL):
     defaults = {
         'DELAY': 30,
         'GEN_PROXY': 0,
-        'MAX_RETRY': 10,
+        'V0_RETRY': 10,
         'COUNT': 16,
         'DEBUG_DELAY': 10000,
         'DEBUG_KEY': 'C0D3-TH1S-1S-JU5T-T35T',
@@ -45,7 +46,7 @@ async def reload_config(config_path='config.json', pool=POOL):
     }
     
     dont_touch = ["EVENTS", "SCHEMAS", "DEBUG_DELAY", "DEBUG_KEY", "DEBUG", "DB", "DEBUG_GAME", "IPV6",
-                  "GEN_PROXY", "MAX_RETRY", "DELAY", "DEBUG_LOG", "MINING", "MINING_DB", "DEV_ID", "IPV6_PORT"]
+                  "GEN_PROXY", "V0_RETRY", "DELAY", "DEBUG_LOG", "MINING", "MINING_DB", "DEV_ID", "IPV6_PORT"]
     need_to = ["DEV_ID", "API_TOKEN", "MAIN_GROUP", "MAIN_CHANNEL", "PROXY"]
     
     # Инициализация итогового конфига
@@ -64,6 +65,12 @@ async def reload_config(config_path='config.json', pool=POOL):
         for proxy in local_config['PROXY']:
             if proxy not in proxies:
                 proxies[proxy] = False
+                
+    # if os.path.exists('proxy.txt'):
+    #     with open('proxy.txt', 'r') as f:
+    #         for proxy in f:
+    #             if proxy.strip() != "" and proxy not in proxies:
+    #                 proxies[(proxy.strip())] = False
     
     useless = []
     # 7. Обнуление значений в локальном конфиге (за исключением "EVENTS" и "SCHEMAS")

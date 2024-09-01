@@ -10,13 +10,13 @@ from .process import update_loadbar
 from .tasks import get_key_limit
 
 from c_telegram import dp, BOT_INFO, bot, snippet, translate, POOL, db_config, json_config
-from database import get_last_user_key, get_promotions, relative_time, append_checker
+from database import get_last_user_key, get_promotions, relative_time, get_full_checkers, append_ticket
 from generate import get_logger
 
 logger = get_logger()
 
-def get_giveaway_link(giveaway_id):
-    return f'https://t.me/{BOT_INFO.username}?start=giveaway_{str(giveaway_id)}'
+def get_arg_link(id, arg='giveaway'):
+    return f'https://t.me/{BOT_INFO.username}?start={arg}_{str(id)}'
 
 # keys funcs
 @dp.callback_query_handler(lambda c: c.data == 'generate_menu')
@@ -131,11 +131,14 @@ async def generate_key(callback_query: types.CallbackQuery) -> None:
                 )
                 
                 giveaways = await get_promotions(task_type='giveaway', pool=POOL)
-                if giveaways:
+                if giveaways and key:
                     give_txt = "\n\n" + snippet['bold'].format(text=translate[cache['lang']]['generate_key'][8])
+                    checkers = await get_full_checkers(user_id=message.chat.id, pool=POOL)
                     for giveaway in giveaways:
-                        give_txt += f"\n{snippet['link'].format(text=giveaways[giveaway]['name'], link=get_giveaway_link(int(giveaway)))}: {count} 🎟"
-                        await append_checker(message.chat.id, int(giveaway))
+                        for check in checkers:
+                            if str(giveaway) in check['promo_id']:
+                                give_txt += f"\n{snippet['link'].format(text=giveaways[giveaway]['name'], link=get_arg_link(int(giveaway)))}: {len(key)} 🎟"
+                                [await append_ticket(user_id=message.chat.id, promo_id=check['id'], pool=POOL) for _ in key]
                     key_text += give_txt
                 
                 stop_button = InlineKeyboardMarkup().add(InlineKeyboardButton(text=translate[cache['lang']]['generate_key'][7], 

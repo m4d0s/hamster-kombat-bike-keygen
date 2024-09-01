@@ -3,6 +3,7 @@ import time
 
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
+from proxy import delete_all_proxy_by_v
 from generate import logger, get_logger
 from database import (now, get_promotions, update_proxy_work, get_pool, update_cache_process)
 
@@ -21,6 +22,7 @@ async def on_startup():
 
     # Обновление кэша пользователей
     users_id = await update_cache_process(POOL)
+    await delete_all_proxy_by_v(pool=POOL)
     logger.info('Free all proxies from work...')
     
     logger.info("Setup giveaways shredule...")

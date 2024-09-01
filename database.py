@@ -79,21 +79,117 @@ async def set_config(config, pool=POOL):
 
 
 #promo
-async def append_checker(user_id: int, promo_id: int,  pool=POOL):
+async def append_checker(user_id: int, promo_id: int, count=0, pool=None):
+    # Early return if essential parameters are missing
     if user_id is None or promo_id is None:
         return
     
+    # Ensure a valid connection pool is available
     if pool is None:
-        pool = await get_pool()  # Убедитесь, что get_pool() возвращает корректный пул соединений
+        pool = await get_pool()  # Ensure get_pool() returns a valid connection pool
     
+    # Retrieve the numeric user ID (or another key) from the database
     num = await get_user_id(user_id, pool)
     if num is None:
-        return  # В случае, если пользователь не найден, можно также вести логирование
+        return  # Log this event if needed, since user was not found
     
+    # Use the connection pool to acquire a connection
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            # Check if the record already exists in the checker table
+            id = await conn.fetchval(
+                f'SELECT id FROM "{SCHEMAS["PROMOTION"]}".checker WHERE user_id = $1 AND promo_id = $2',
+                num, promo_id
+            )
+            
+            # If the record does not exist, insert a new one
+            if not id:
+                await conn.execute(
+                    f'INSERT INTO "{SCHEMAS["PROMOTION"]}".checker (user_id, promo_id) VALUES ($1, $2)',
+                    num, promo_id
+                )
+            
+            # If the record exists and count > 0, update the count
+            elif count > 0:
+                await conn.execute(
+                    f'UPDATE "{SCHEMAS["PROMOTION"]}".checker SET count = count + ($1) WHERE id = $2',
+                    count, id
+                )
+
+async def append_ticket(user_id: int, promo_id: int, pool=POOL):
+    if user_id is None or promo_id is None:
+        return
+
+    if pool is None:
+        pool = await get_pool()  # Ensure get_pool() returns a valid connection pool
+        
+    num = await get_user_id(user_id, pool)
+    if num is None:
+        return  # Log this event if needed, since user was not found
+
     async with pool.acquire() as conn:
         async with conn.transaction():
             await conn.execute(
-                f'INSERT INTO "{SCHEMAS["PROMOTION"]}".checker (user_id, promo_id) VALUES ($1, $2)',
+                f'INSERT INTO "{SCHEMAS["PROMOTION"]}".tickets (user_id, promo_id, time) VALUES ($1, $2, $3)',
+                num, promo_id, now()
+            )
+
+async def get_tickets(user_id: int, start=0, end=None, pool=POOL):
+    end = end or now()
+    
+    if user_id is None:
+        return
+    
+    if pool is None:
+        pool = await get_pool()
+    
+    num = await get_user_id(user_id, pool)
+    if num is None:
+        return
+
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            args = [f"time >= {start}" if start else "", f"time <= {end}" if end else ""]
+            args = "AND " + " AND ".join(arg for arg in args if arg) if args else ""
+            records = await conn.fetch(f'SELECT * FROM "{SCHEMAS["PROMOTION"]}".tickets WHERE user_id = $1 {args}', num)
+            return [dict(record) for record in records]
+
+async def get_full_checkers(user_id: int, pool=POOL):
+    if user_id is None:
+        return
+
+    if pool is None:
+        pool = await get_pool()  # Убедитесь, что get_pool() возвращает корректный пул соединений
+
+    num = await get_user_id(user_id, pool)
+    if num is None:
+        return  # В случае, если пользователь не найден, можно также вести логирование
+
+    full_dict = {}
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            records = await conn.fetch(f'SELECT * FROM "{SCHEMAS["PROMOTION"]}".checker WHERE user_id = $1', num)
+            for record in records:
+                full_dict[record['promo_id']] = dict(record)
+
+    return full_dict
+        
+
+async def delete_checker(user_id: int, promo_id: int, pool=POOL):
+    if user_id is None or promo_id is None:
+        return
+
+    if pool is None:
+        pool = await get_pool()  # Убедитесь, что get_pool() возвращает корректный пул соединений
+
+    num = await get_user_id(user_id, pool)
+    if num is None:
+        return  # В случае, если пользователь не найден, можно также вести логирование
+
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            await conn.execute(
+                f'DELETE FROM "{SCHEMAS["PROMOTION"]}".checker WHERE user_id = $1 AND promo_id = $2',
                 num, promo_id
             )
 
@@ -140,10 +236,15 @@ async def get_promotions(task_type: str = 'task', all=False, delay=0, pool=None)
     async with pool.acquire() as conn:
         async with conn.transaction():
             # Получаем все промо по типу
-            promo_rows = await conn.fetch(
-                f'SELECT * FROM "{SCHEMAS["PROMOTION"]}".promo WHERE type = $1{" and expire > " + str(now() + delay) if not all else ""}',
-                task_type
-            )
+            if task_type == 'all':
+                promo_rows = await conn.fetch(
+                    f'SELECT * FROM "{SCHEMAS["PROMOTION"]}".promo {"WHERE expire > " + str(now() + delay) if not all else ""}'
+                )
+            else:
+                promo_rows = await conn.fetch(
+                    f'SELECT * FROM "{SCHEMAS["PROMOTION"]}".promo WHERE type = $1 {"AND expire > " + str(now() + delay) if not all else ""}',
+                    task_type
+                )
             # Преобразуем строки в словарь
             result = {str(row['id']): dict(row) for row in promo_rows}
             
@@ -166,7 +267,7 @@ async def get_promotions(task_type: str = 'task', all=False, delay=0, pool=None)
                         
                         result[promo_id][lang][translation_type] = value
             
-                    if task_type == 'giveaway':
+                    if result[promo_id]['type'] == 'giveaway':
                         prizes_q = f"SELECT * FROM \"{SCHEMAS['PROMOTION']}\".promo_prizes WHERE promo_id = $1 ORDER BY place ASC"
                         prizes = await conn.fetch(prizes_q, int(promo_id))
                         result[promo_id]['prizes'] = []
@@ -188,16 +289,18 @@ async def insert_task(task: dict, check: int = 1, task_type: str = 'task', expir
     
     async with pool.acquire() as conn:
         async with conn.transaction():
+            # Initialize task_id
+            task_id = None
+
             # Insert or update the main task record
             id = await conn.fetchval(
                 f'''
                 SELECT id FROM "{SCHEMAS["PROMOTION"]}".promo
-                WHERE name = $1 AND type = $2 and check_id = $3
+                WHERE name = $1 AND type = $2 AND check_id = $3
                 LIMIT 1
                 ''',
                 task['name'], task_type, task['check_id']
             )
-            id = id or None
             
             if not id:
                 record = await conn.fetchrow(
@@ -208,10 +311,17 @@ async def insert_task(task: dict, check: int = 1, task_type: str = 'task', expir
                     ''',
                     task['name'], task['desc'], task['link'], task['check_id'], check, task_type, now(), task['expire']
                 )
-            
                 task_id = record['id']
             else:
                 task_id = id
+                await conn.execute(
+                    f'''
+                    UPDATE "{SCHEMAS["PROMOTION"]}".promo
+                    SET name = $1, "desc" = $2, link = $3, control = $4, type = $5, time = $6, expire = $7
+                    WHERE id = $8
+                    ''',
+                    task['name'], task['desc'], task['link'], check, task_type, now(), task['expire'], id
+                )
             
             # Insert or update translations
             for lang, translations in task.items():
@@ -220,7 +330,7 @@ async def insert_task(task: dict, check: int = 1, task_type: str = 'task', expir
                 
                 for obj, value in translations.items():
                     value = str(value)
-                    some_id = await conn.fetchrow(
+                    some_id = await conn.fetchval(
                         f'''
                         SELECT id FROM "{SCHEMAS["PROMOTION"]}".promo_translate
                         WHERE promo_id = $1 AND lang = $2 AND type = $3
@@ -228,7 +338,7 @@ async def insert_task(task: dict, check: int = 1, task_type: str = 'task', expir
                         task_id, lang, obj
                     )
                     
-                    if some_id is None:
+                    if not some_id:
                         await conn.execute(
                             f'''
                             INSERT INTO "{SCHEMAS["PROMOTION"]}".promo_translate (promo_id, lang, type, value)
@@ -243,38 +353,33 @@ async def insert_task(task: dict, check: int = 1, task_type: str = 'task', expir
                             SET value = $1
                             WHERE id = $2
                             ''',
-                            value, some_id['id']
+                            value, some_id
                         )
                 
             if task_type == 'giveaway' and 'prizes' in task:
                 for prize in task['prizes']:
+                    task_id = prize.pop('promo_id') or task_id
                     if 'id' in prize:
-                        # Pop the 'id' key from the prize dictionary to get the id value.
-                        id = prize.pop('id')
-
-                        # Construct the UPDATE SQL query.
+                        prize_id = prize.pop('id')
                         query = f'''
                             UPDATE "{SCHEMAS["PROMOTION"]}".promo_prizes 
                             SET {", ".join([f"{key} = ${i+3}" for i, key in enumerate(prize.keys())])} 
                             WHERE promo_id = $1 AND id = $2
                         '''
 
-                        # Execute the UPDATE query, passing task_id, id, and prize values.
-                        await conn.execute(query, task_id, id, *[prize[key] for key in prize])
+                        await conn.execute(query, task_id, prize_id, *[prize[key] for key in prize])
 
                     else:
-                        # Construct the INSERT SQL query.
                         query = f'''
-                            INSERT INTO "{SCHEMAS["PROMOTION"]}".promo_prizes ({", ".join(prize.keys())})
-                            VALUES ({", ".join([f"${i+1}" for i in range(len(prize))])})
+                            INSERT INTO "{SCHEMAS["PROMOTION"]}".promo_prizes (promo_id, {", ".join(prize.keys())})
+                            VALUES ($1, {", ".join([f"${i+2}" for i in range(len(prize))])})
                             RETURNING id
                         '''
 
-                        # Execute the INSERT query, passing task_id and prize values.
-                        await conn.execute(query, *[prize[key] for key in prize])
-
+                        await conn.execute(query, task_id, *[prize[key] for key in prize])
     
     return task_id
+
 
 async def delete_task_by_id(id:int, pool=POOL) -> None:
     if id is None:

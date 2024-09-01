@@ -3,7 +3,7 @@ from aiogram import types
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup
 
 from .giveaway import process_callback_giveaway
-from .tasks import check_completed_tasks, get_key_limit
+from .tasks import check_completed_tasks, get_key_limit, generate_task_message
 from .message import new_message, try_to_delete
 from .cache import get_cached_data, set_cached_data
 
@@ -22,6 +22,10 @@ def hide_key(key:str) -> str:
         else:
             hiden_key += key[i]
     return hiden_key
+
+@dp.callback_query_handler(lambda c: c.data == 'close')
+async def process_callback_close(callback_query: types.CallbackQuery) -> None:
+    await try_to_delete(callback_query.message.chat.id, callback_query.message.message_id)
 
 #user setup
 @dp.callback_query_handler(lambda c: c.data == 'main_menu')
@@ -42,13 +46,19 @@ async def start_pointer(message: types.Message) -> None:
     if message.chat.type != types.ChatType.PRIVATE:
         return
     arguments = list(message.get_args().split())
-    if len(arguments) == 1 and arguments[0].isdigit() or len(arguments) == 0:
+    if len(arguments) > 0 and arguments[0].isdigit() or len(arguments) == 0:
         await send_language_choose(message)
     elif len(arguments) == 1 and arguments[0].startswith('giveaway_'):
         fake_callback = types.CallbackQuery(id=f"simulated_{arguments[0]}",
                                             data=f'{arguments[0]}', message=message,
                                             from_user=message.from_user)
         await process_callback_giveaway(fake_callback)     
+    elif len(arguments) > 0 and arguments[0].startswith('task_'):
+        fake_callback = types.CallbackQuery(id=f"from_{arguments[0]}",
+                                            data=f'{arguments[0].replace("task_", "generate_task_")}',
+                                            message=message,
+                                            from_user=message.from_user)
+        await generate_task_message(fake_callback)    
 
 @dp.message_handler(commands=['language'])    
 async def send_language_choose(message: types.Message) -> None:
