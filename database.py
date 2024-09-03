@@ -134,25 +134,25 @@ async def append_ticket(user_id: int, promo_id: int, pool=POOL):
                 num, promo_id, now()
             )
 
-async def get_tickets(user_id: int, start=0, end=None, pool=POOL):
+async def get_tickets(user_id: int, start=0, end=None, giveaway_id=None, pool=POOL):
     end = end or now()
     
     if user_id is None:
-        return
+        return []
     
     if pool is None:
         pool = await get_pool()
     
     num = await get_user_id(user_id, pool)
     if num is None:
-        return
+        return []
 
     async with pool.acquire() as conn:
         async with conn.transaction():
-            args = [f"time >= {start}" if start else "", f"time <= {end}" if end else ""]
+            args = [f"time >= {start}" if start else "", f"time <= {end}" if end else "", f"task_id = {giveaway_id}" if giveaway_id else ""]
             args = "AND " + " AND ".join(arg for arg in args if arg) if args else ""
             records = await conn.fetch(f'SELECT * FROM "{SCHEMAS["PROMOTION"]}".tickets WHERE user_id = $1 {args}', num)
-            return [dict(record) for record in records]
+            return [dict(record) for record in records] or []
 
 async def get_full_checkers(user_id: int, pool=POOL):
     if user_id is None:

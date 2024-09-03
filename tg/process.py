@@ -103,6 +103,9 @@ async def update_report(chat_id: int,
         if not users:
             return
         user_ids = users
+        
+    if isinstance(text, str):
+        text = {'default': text}
     
     max_users = len(user_ids)
     semaphore = asyncio.Semaphore(max_concurrent_tasks)
@@ -116,10 +119,20 @@ async def update_report(chat_id: int,
             except (BotBlocked, ChatNotFound):
                 await delete_user(user_id, pool=POOL)
 
-    tasks = [asyncio.create_task(send_with_semaphore(user_id)) for user_id in user_ids]
-
     cache['process'] = False
     await set_cached_data(chat_id, cache)
+    
+    if cache['report']:
+        await try_to_delete(chat_id, cache['report'])
+    start_text = '\n'.join([snippet['code-block'].format(lang=x, text=text[x]) for x in text.keys()]) +'\n\n' + 'Report started in 5 seconds.....' \
+                if isinstance(text, dict) else text 
+    stop_button = InlineKeyboardMarkup().add(InlineKeyboardButton(text=translate[cache['lang']]['update_report'][4], 
+                                                                  callback_data="stop_process"))
+    REPORT_MESS = await new_message(chat_id=chat_id, text=start_text, keyboard=stop_button)
+    cache['report'] = REPORT_MESS.message_id
+    await asyncio.sleep(5)
+    
+    tasks = [asyncio.create_task(send_with_semaphore(user_id)) for user_id in user_ids]
     
     while not cache['process']:
         loading = len([task for task in tasks if task.done()])

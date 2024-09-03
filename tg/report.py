@@ -70,12 +70,12 @@ async def report(message: types.Message) -> None:
     text_without_buttons = re.sub(r'\[(.+?)\]\[(.+?)\]', '', message.html_text).strip()
 
     transl = re.findall(r'<pre>```(\w+)\n(.*?)\n```<\/pre>|<pre><code class="language-(\w+)">(.*?)<\/code><\/pre>', text_without_buttons, re.DOTALL)
-    if transl is None:
-        transl = [('default',message.html_text,'','')]
+    if not transl:
+        transl = [('default',text_without_buttons,'','')]
     else:
         default = transl[0]
         default = ('default', default[1], default[2], default[3])
-        transl.append(default)
+        transl = [default] + transl
     text_dict = {x[0] or x[2]: x[1] or x[3] for x in transl} if transl else {}
 
     keyboard = InlineKeyboardMarkup()

@@ -15,7 +15,7 @@ from .process import update_report
 from generate import get_logger
 from database import (get_promotions, get_all_user_keys_24h, delete_user, get_user, format_remaining_time,
                       insert_task, get_checker_by_task_id, get_user_id, get_checker_by_user_id, now,
-                      append_checker, delete_checker, get_full_checkers, get_tickets)
+                      append_checker, delete_checker, get_tickets, append_ticket)
 
 logger = get_logger()
 
@@ -61,6 +61,9 @@ async def process_callback_giveaway(callback_query: types.CallbackQuery) -> None
     used, all_t = await get_tasks_limit(callback_query.message.chat.id)
     promo_id = callback_query.data.split('_')[1]
     req = giveaways[promo_id]['link'].split(',') 
+    unreq = [task for task in req if task not in tasks]
+    req = [task for task in req if task not in unreq]
+    
     if promo_id not in giveaways and str(promo_id) not in used:
         await bot.answer_callback_query(callback_query.id, show_alert=True, text=translate[cache['lang']]['process_callback_giveaway'][8])
         return
@@ -99,14 +102,14 @@ async def process_callback_giveaway(callback_query: types.CallbackQuery) -> None
             keyboard.add(InlineKeyboardButton(text="" + translate[cache['lang']]['process_callback_giveaway'][12], callback_data=f'set_checker_giveaway_{promo_id}'))
     else:
         for x in req:
-            if str(x) not in used:
+            if str(x) not in used and str(x) in tasks:
                 keyboard.add(InlineKeyboardButton(text="🔑 " + tasks[str(x)].get('name', f'task_id = {x}'), url=get_arg_link(x, arg='task')))
         keyboard.add(InlineKeyboardButton(text=translate[cache['lang']]['process_callback_giveaway'][14], callback_data=callback_query.data))
     if request_level(cache['right'], 2, callback_query.message.chat.id): # 2 - giveaways
         keyboard.add(InlineKeyboardButton(text=translate[cache['lang']]['process_callback_giveaway'][13], callback_data=f'setup_tasks_for_giveaway_{promo_id}'),
         InlineKeyboardButton(text=translate[cache['lang']]['process_callback_giveaway'][9], callback_data=f'add_prize_{promo_id}'))
     if request_level(cache['right'], 9, callback_query.message.chat.id): # 9 - debug
-        keyboard.add(InlineKeyboardButton(text='🪭 Make test roll', callback_data='roll_the_dice_by_keys'))
+        keyboard.add(InlineKeyboardButton(text='🪭 Make test roll', callback_data=f'roll_giveaway_{promo_id}'))
     keyboard.add(InlineKeyboardButton(text=translate[cache['lang']]['process_callback_giveaway'][4], callback_data='giveaways'))
     TASK = await new_message(chat_id=callback_query.message.chat.id, text=text, keyboard=keyboard)
     cache['tasks']=TASK.message_id
@@ -142,17 +145,21 @@ async def set_checker_giveaway(callback_query: types.CallbackQuery) -> None:
 async def delete_giveaway(callback_query: types.CallbackQuery) -> None:
     await delete_task_message(callback_query, task_type='giveaway')
 
-@dp.callback_query_handler(lambda c: c.data == 'roll_the_dice_by_keys')
-async def roll_the_dice_by_keys(giveaway_id):
+@dp.callback_query_handler(lambda c: c.data.startswith('roll_giveaway_'))
+async def roll_early_dice(callback_query: types.CallbackQuery) -> None:
+    await roll_the_dice_by_keys(int(callback_query.data.split('_')[2]))
+
+async def roll_the_dice_by_keys(giveaway_id:int) -> None:
     joined = await get_checker_by_task_id(giveaway_id, pool=POOL)
     promo = await get_promotions(task_type='giveaway', pool=POOL, all=True)
     curr = promo[str(giveaway_id)]
     tickets = []
     for user_id in joined:
         user = await get_user(user_id, pool=POOL, tg=False)
-        keys = await get_all_user_keys_24h(user['tg_id'], start=curr['time'], end=curr['expire'], pool=POOL)
-        for key in keys:
-            tickets.append([key[1], user['tg_id']])
+        if not user:
+            joined.remove(user_id)
+            continue
+        tickets.extend(await get_tickets(user_id, start=curr['time'], end=curr['expire'], giveaway_id=curr['id'], pool=POOL))
     tickets.sort(key=lambda x: x[0])
     if len(tickets) == 0:
         return
@@ -192,7 +199,7 @@ async def add_giveaway(callback_query: types.CallbackQuery) -> None:
 async def setup_tasks_requirements(message: types.Message, giveaway:int=None) -> None:
     cache = await get_cached_data(message.chat.id) ##cache
     text = snippet['bold'].format(text=translate[cache['lang']]['setup_tasks_requirements'][0])
-    id = await reply_to_task(message, 'giveaway')
+    id = await reply_to_task(message, 'giveaway') if not giveaway else None
     g_id = giveaway or id
     if not g_id:
         return
@@ -313,7 +320,18 @@ async def change_giveaway_tasks(callback_query: types.CallbackQuery) -> None:
 
 
 
-
+async def append_tickets_to(giveaway_id:int, user_id:int, tickets:int, pool, giveaway=True):
+    for i in range(tickets):
+        await append_ticket(user_id=user_id, promo_id=giveaway_id, pool=pool)
+    promo = await get_promotions(task_type='all', pool=pool, all=True)
+    giveaway = promo[str(giveaway_id)]
+    if not giveaway:
+        append_checker(user_id, giveaway_id, count=tickets, pool=pool)
+        return
+    
+    tasks = [promo[str(giveaway_id)] for giveaway_id in giveaway['link'].split(',') if giveaway_id.isdigit()]
+    for task in tasks+giveaway:
+        append_checker(user_id, task['promo_id'], count=tickets, pool=pool)
     
 @dp.callback_query_handler(lambda c: c.data.startswith('add_prize_'))
 async def add_prize(callback_query: types.CallbackQuery) -> None:

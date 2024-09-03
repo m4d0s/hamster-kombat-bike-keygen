@@ -8,6 +8,7 @@ from .message import send_error_message, new_message, try_to_delete, try_to_edit
 from .cache import get_cached_data, set_cached_data
 from .process import update_loadbar
 from .tasks import get_key_limit
+from .giveaway import append_tickets_to
 
 from c_telegram import dp, BOT_INFO, bot, snippet, translate, POOL, db_config, json_config
 from database import get_last_user_key, get_promotions, relative_time, get_full_checkers, append_ticket
@@ -134,11 +135,18 @@ async def generate_key(callback_query: types.CallbackQuery) -> None:
                 if giveaways and key:
                     give_txt = "\n\n" + snippet['bold'].format(text=translate[cache['lang']]['generate_key'][8])
                     checkers = await get_full_checkers(user_id=message.chat.id, pool=POOL)
+                    unreached, already = [], []
+                    
                     for giveaway in giveaways:
                         for check in checkers:
-                            if str(giveaway) in check['promo_id']:
-                                give_txt += f"\n{snippet['link'].format(text=giveaways[giveaway]['name'], link=get_arg_link(int(giveaway)))}: {len(key)} 🎟"
-                                [await append_ticket(user_id=message.chat.id, promo_id=check['id'], pool=POOL) for _ in key]
+                            if str(giveaway) in check['promo_id'] and str(giveaway) not in already:
+                                give_txt += f"\n{snippet['link'].format(text=giveaways[giveaway][cache['lang']]['name'], link=get_arg_link(int(giveaway)))}: {len(key)} 🎟"
+                                await append_tickets_to(int(giveaway), message.chat.id, len(key), pool=POOL)   
+                                already.append(str(giveaway))
+                            else:
+                                unreached.append(giveaway)
+                    for giveaway in set(unreached):
+                        give_txt += f"\n{snippet['link'].format(text=giveaways[giveaway][cache['lang']]['name'], link=get_arg_link(int(giveaway)))} ({translate[cache['lang']]['generate_key'][9]})"
                     key_text += give_txt
                 
                 stop_button = InlineKeyboardMarkup().add(InlineKeyboardButton(text=translate[cache['lang']]['generate_key'][7], 
