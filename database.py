@@ -116,8 +116,8 @@ async def append_checker(user_id: int, promo_id: int, count=0, pool=None):
                     count, id
                 )
 
-async def append_ticket(user_id: int, promo_id: int, pool=POOL):
-    if user_id is None or promo_id is None:
+async def append_ticket(user_id: int, checker_id: int, pool=POOL):
+    if user_id is None or checker_id is None:
         return
 
     if pool is None:
@@ -130,8 +130,8 @@ async def append_ticket(user_id: int, promo_id: int, pool=POOL):
     async with pool.acquire() as conn:
         async with conn.transaction():
             await conn.execute(
-                f'INSERT INTO "{SCHEMAS["PROMOTION"]}".tickets (user_id, promo_id, time) VALUES ($1, $2, $3)',
-                num, promo_id, now()
+                f'INSERT INTO "{SCHEMAS["PROMOTION"]}".tickets (user_id, checker_id, time) VALUES ($1, $2, $3)',
+                num, checker_id, now()
             )
 
 async def get_tickets(user_id: int, start=0, end=None, giveaway_id=None, pool=POOL):
@@ -170,9 +170,21 @@ async def get_full_checkers(user_id: int, pool=POOL):
         async with conn.transaction():
             records = await conn.fetch(f'SELECT * FROM "{SCHEMAS["PROMOTION"]}".checker WHERE user_id = $1', num)
             for record in records:
-                full_dict[record['promo_id']] = dict(record)
+                full_dict[record['id']] = dict(record)
 
     return full_dict
+
+async def get_full_checker(id: int, pool=POOL):
+    if id is None:
+        return
+
+    if pool is None:
+        pool = await get_pool()  # Убедитесь, что get_pool() возвращает корректный пул соединений
+        
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            record = await conn.fetchrow(f'SELECT * FROM "{SCHEMAS["PROMOTION"]}".checker WHERE id = $1', id)
+            return dict(record)
         
 
 async def delete_checker(user_id: int, promo_id: int, pool=POOL):

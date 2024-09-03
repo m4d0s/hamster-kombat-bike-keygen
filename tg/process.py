@@ -10,7 +10,7 @@ from .message import send_error_message, new_message, try_to_delete, try_to_edit
 from .cache import get_cached_data, set_cached_data
 
 from c_telegram import dp, BOT_INFO, bot, snippet, translate, POOL, db_config, json_config
-from database import (insert_key_generation, get_all_user_ids, now, get_unused_key_of_type, format_remaining_time, delete_user)
+from database import (get_all_user_ids, now, get_unused_key_of_type, format_remaining_time, delete_user)
 from generate import generate_loading_bar, get_key, delay, get_logger
 
 logger = get_logger()
@@ -44,7 +44,6 @@ async def update_loadbar(chat_id: int, game_key: str, session: aiohttp.ClientSes
         if free_key:
             keys.append(free_key)
             loadbars[i] = snippet['bold'].format(text=game_key + ": ") + snippet['code'].format(text=free_key)
-            await insert_key_generation(chat_id, free_key, game_key, used=True, pool=POOL)
             continue
         
         task = asyncio.create_task(get_key(session, game_key))

@@ -11,7 +11,7 @@ from .tasks import get_key_limit
 from .giveaway import append_tickets_to
 
 from c_telegram import dp, BOT_INFO, bot, snippet, translate, POOL, db_config, json_config
-from database import get_last_user_key, get_promotions, relative_time, get_full_checkers, append_ticket
+from database import get_last_user_key, get_promotions, relative_time, get_full_checkers, now, insert_key_generation
 from generate import get_logger
 
 logger = get_logger()
@@ -97,10 +97,6 @@ async def generate_key(callback_query: types.CallbackQuery) -> None:
     last_user_key = await get_last_user_key(message.chat.id, pool=POOL)
     user_limit_keys, global_limit_keys = await get_key_limit(user=message.chat.id)
 
-    if cache.get('loading') and cache.get('process'):
-        await try_to_delete(chat_id=message.chat.id, message_id=cache['loading'])
-        cache['loading'] = None
-
     def can_generate_key():
         return not last_user_key or abs(relative_time(last_user_key['time'])) > db_config['DELAY'] or json_config['DEBUG']
 
@@ -130,23 +126,25 @@ async def generate_key(callback_query: types.CallbackQuery) -> None:
                     '\n'.join([snippet['bold'].format(text=game_key) + ": " + snippet['code'].format(text=k) for k in key if k])
                     if key else translate[cache['lang']]['generate_key'][2]
                 )
+                for k in key:
+                    await insert_key_generation(user_id=message.chat.id, key=k, key_type=game_key, pool=POOL)
                 
                 giveaways = await get_promotions(task_type='giveaway', pool=POOL)
                 if giveaways and key:
                     give_txt = "\n\n" + snippet['bold'].format(text=translate[cache['lang']]['generate_key'][8])
                     checkers = await get_full_checkers(user_id=message.chat.id, pool=POOL)
-                    unreached, already = [], []
-                    
-                    for giveaway in giveaways:
-                        for check in checkers:
-                            if str(giveaway) in check['promo_id'] and str(giveaway) not in already:
-                                give_txt += f"\n{snippet['link'].format(text=giveaways[giveaway][cache['lang']]['name'], link=get_arg_link(int(giveaway)))}: {len(key)} 🎟"
-                                await append_tickets_to(int(giveaway), message.chat.id, len(key), pool=POOL)   
-                                already.append(str(giveaway))
-                            else:
-                                unreached.append(giveaway)
-                    for giveaway in set(unreached):
-                        give_txt += f"\n{snippet['link'].format(text=giveaways[giveaway][cache['lang']]['name'], link=get_arg_link(int(giveaway)))} ({translate[cache['lang']]['generate_key'][9]})"
+                    giveaways_ids = [int(x) for x in giveaways]
+
+                    for check in checkers:
+                        if checkers[check]['promo_id'] in giveaways_ids:
+                            gv_id = str(checkers[check]['promo_id']) ; giveaways_ids.remove(checkers[check]['promo_id'])
+                            give_txt += f"\n{snippet['link'].format(text=giveaways[gv_id][cache['lang']]['name'], link=get_arg_link(int(gv_id)))}: {len(key)} 🎟"
+                            await append_tickets_to(int(check), message.chat.id, len(key), pool=POOL)   
+                            
+                    for gv_id in giveaways_ids:
+                        give_txt += f"\n{snippet['link'].format(text=giveaways[gv_id][cache['lang']]['name'], link=get_arg_link(gv_id))} ({translate[cache['lang']]['generate_key'][9]})" \
+                                    if giveaways[str(gv_id)]['expire'] > now() > giveaways[str(gv_id)]['time'] else ''
+                                    
                     key_text += give_txt
                 
                 stop_button = InlineKeyboardMarkup().add(InlineKeyboardButton(text=translate[cache['lang']]['generate_key'][7], 

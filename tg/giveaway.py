@@ -13,7 +13,7 @@ from .cache import get_cached_data, set_cached_data
 from .process import update_report
 
 from generate import get_logger
-from database import (get_promotions, get_all_user_keys_24h, delete_user, get_user, format_remaining_time,
+from database import (get_promotions, get_full_checker, delete_user, get_user, format_remaining_time,
                       insert_task, get_checker_by_task_id, get_user_id, get_checker_by_user_id, now,
                       append_checker, delete_checker, get_tickets, append_ticket)
 
@@ -107,9 +107,9 @@ async def process_callback_giveaway(callback_query: types.CallbackQuery) -> None
             
             # Формируем строку с информацией о призе
             if now() > giveaways[promo_id]['expire']:
-                prize_text = f"#{i+1} {combined_prizes} ({translate[cache['lang']]['process_callback_giveaway'][11]}{prize['winner_id']})"
+                prize_text = f"#{i+1} {combined_prizes}\n\t{translate[cache['lang']]['process_callback_giveaway'][11]}{prize['winner_id']}"
             else:
-                prize_text = f"#{i+1} {combined_prizes} ({translate[cache['lang']]['process_callback_giveaway'][10]}{' + '.join(prize['owner_id'])})"
+                prize_text = f"#{i+1} {combined_prizes}\n\t{translate[cache['lang']]['process_callback_giveaway'][10]}{' + '.join(prize['owner_id'])}"
             
             prize_texts.append(prize_text)
 
@@ -167,7 +167,7 @@ async def set_checker_giveaway(callback_query: types.CallbackQuery) -> None:
                 elif action == actions[1]:
                     button = InlineKeyboardButton(text=button.text.replace('✅ ', ''), callback_data=f'{actions[0]}_checker_giveaway_{promo}')
                 keyboard.inline_keyboard[i][j] = button
-                await try_to_edit(message.html_text, message.chat.id, message.message_id, keyboard=keyboard)
+                await try_to_edit(message.html_text, message.chat.id, message.message_id, keyboard=keyboard, format=False)
                 return
 
 @dp.callback_query_handler(lambda c: c.data == 'delete_giveaway')
@@ -349,18 +349,21 @@ async def change_giveaway_tasks(callback_query: types.CallbackQuery) -> None:
 
 
 
-async def append_tickets_to(giveaway_id:int, user_id:int, tickets:int, pool, giveaway=True):
+async def append_tickets_to(checker_id:int, user_id:int, tickets:int, pool, giveaway=True):
     for i in range(tickets):
-        await append_ticket(user_id=user_id, promo_id=giveaway_id, pool=pool)
+        await append_ticket(user_id=user_id, checker_id=checker_id, pool=pool)
     promo = await get_promotions(task_type='all', pool=pool, all=True)
-    giveaway = promo[str(giveaway_id)]
+    check = await get_full_checker(checker_id, pool=pool)
+    gv = promo.get(str(check['promo_id']), {})
+    # giveaway_id = check['task_id']
     if not giveaway:
-        append_checker(user_id, giveaway_id, count=tickets, pool=pool)
+        append_checker(user_id, checker_id, count=tickets, pool=pool)
         return
     
-    tasks = [promo[str(giveaway_id)] for giveaway_id in giveaway['link'].split(',') if giveaway_id.isdigit()]
-    for task in tasks+giveaway:
-        append_checker(user_id, task['promo_id'], count=tickets, pool=pool)
+    tasks = [promo.get(str(giveaway_id), {}) for giveaway_id in gv['link'].split(',') if giveaway_id.isdigit()]
+    for task in tasks+ [gv]:
+        if task:
+            await append_checker(user_id, task['id'], count=tickets, pool=pool)
     
 @dp.callback_query_handler(lambda c: c.data.startswith('add_prize_'))
 async def add_prize(callback_query: types.CallbackQuery) -> None:

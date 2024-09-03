@@ -13,8 +13,9 @@ from generate import get_logger
 
 logger = get_logger()
 
-def html_back_escape(text:str) -> str:
-    return str(text).replace('&lt;', '＜').replace('&gt;', '＞').replace('&amp;', '＆')
+def html_back_escape(text:str, format=True) -> str:
+    return str(text).replace('&lt;', '＜').replace('&gt;', '＞').replace('&amp;', '＆') if format \
+        else str(text).replace('&lt;', '<').replace('&gt;', '>').replace('&amp;', '&')
 
 async def try_to_delete(chat_id:int, message_id:int) -> bool:
     if message_id is None or message_id == 0:
@@ -32,12 +33,12 @@ async def try_to_delete(chat_id:int, message_id:int) -> bool:
         logger.error(f'Error sending message in chat {chat_id}: {error_text}')
         return
     
-async def try_to_edit(text:str, chat_id:int, message_id:int, keyboard: InlineKeyboardMarkup = None) -> bool:
+async def try_to_edit(text:str, chat_id:int, message_id:int, keyboard: InlineKeyboardMarkup = None, format=True) -> bool:
     if message_id is None or message_id == 0:
         logger.debug('Message ID is None to edit in chat ' + str(chat_id))
         return False
     try:
-        await bot.edit_message_text(text, chat_id, message_id, parse_mode=ParseMode.HTML, reply_markup=keyboard)
+        await bot.edit_message_text(html_back_escape(text, format), chat_id, message_id, parse_mode=ParseMode.HTML, reply_markup=keyboard)
         return True
     except MessageNotModified:
         return False
