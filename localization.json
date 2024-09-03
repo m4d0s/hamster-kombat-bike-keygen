@@ -104,7 +104,7 @@
         "Призов нету :(", "Закончится через: {time}", "Розыгрыш завершен", "🎁 Добавить призы", "Спонсор: ", 
         "Победитель: ", "Принять участие", "Изменить задания", "🔄 Перепроверить"],
         "reply_to_giveaway":["Теперь напиши призы за участие в следующем формате (каждый на новой строке): ",
-        "Имя вашего приза 1 (@sponsor1) [ссылка по желанию]\nИмя вашего приза 2 (@sponsor2) [ссылка по желанию]\nИмя вашего приза 3 (@sponsor3) [ссылка по желанию]"],
+        "Имя вашего приза 1 (@sponsor1) [ссылка по желанию]\nИмя вашего приза 2 + Имя вашего приза 3 (@sponsor2 + @sponsor3) [ссылка по желанию 2 + ссылка по желанию 3]\nИмя вашего приза 3 (@sponsor3) [ссылка по желанию]"],
         "setup_tasks_requirements" : ["Теперь выбери, какие задания необходимы для того, чтобы принять участие в конкурсе", "К призам", "Вернуться к конкурсу"],
         "reply_to_prizes": ["Появился новый конкурс с крутыми призами: \"{name}\"\n\nСпешите выполнить, чтобы получить шанс выиграть, по ссылке ниже", "Перейти к конкурсу"]
     },
@@ -199,7 +199,7 @@
         "Generate keys in our bot and get 🎟", "Back to active giveaways", "Your tickets here: {count} 🎟",
         "No prizes :(", "Ends in: {time}", "Giveaway ended", "🎁 Add prizes", "Sponsor: ", "Winner: ", "Participate", "Change tasks", "🔄 Reload"],
         "reply_to_giveaway":["Now write the prizes for the giveaway in the following format (each on a new line): ",
-        "Name of prize 1 (@sponsor1) [link optional]\nName of prize 2 (@sponsor2) [link optional]\nName of prize 3 (@sponsor3) [link optional]"],
+        "Name of prize 1 (@sponsor1) [link optional]\nName of prize 2 + Name of prize 3 (@sponsor2 + @sponsor3) [link optional 2 + link optional 3]\nName of prize 3 (@sponsor3) [link optional]"],
         "setup_tasks_requirements" : ["Now select which tasks you want to make nessesary to participate in giveaway", "To prizes", "Back to giveaway"],
         "reply_to_prizes": ["A new giveaway with amazing prizes has appeared: \"{name}\"\n\nHurry up and participate for a chance to win by following the link below", "Go to giveaway"]
     }

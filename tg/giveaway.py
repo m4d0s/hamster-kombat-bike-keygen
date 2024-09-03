@@ -73,17 +73,46 @@ async def process_callback_giveaway(callback_query: types.CallbackQuery) -> None
 
     if giveaways[promo_id]['prizes']:
         prize_texts = []
+        plus = ['link', 'name', 'owner_id']
+        
         for i, prize in enumerate(giveaways[promo_id]['prizes']):
-            if 'link' not in prize:
-                prize['link'] = ''
-            elif prize['link'].startswith('@'):
-                prize['link'] = f'https://t.me/{prize["link"][1:]}'
-            nm = prize['name'] if not prize['link'] and '://' in prize['link'] else snippet['link'].format(text=prize['name'], link=prize['link'])
+            prize_links = []
+            # Преобразование значений в списки, разделённые знаком '+'
+            for key in plus:
+                prize[key] = prize.get(key, '').split("+") if '+' in prize.get(key, '') else [prize.get(key, '')]
+                prize[key] = [x.strip() for x in prize[key]]
+            
+            # Определение максимальной длины списков
+            max_len = max(len(prize[plus[0]]), len(prize[plus[1]]), len(prize[plus[2]]))
+            
+            # Добавляем пустые строки для списков, длина которых меньше максимальной
+            for key in plus:
+                while len(prize[key]) < max_len:
+                    prize[key].append('')
+            
+            # Преобразуем данные для каждого приза
+            for link, name, owner_id in zip(prize[plus[0]], prize[plus[1]], prize[plus[2]]):
+                # Если ссылка начинается с '@', формируем полный URL
+                if link.startswith('@'):
+                    link = f'https://t.me/{link[1:]}'
+                
+                # Если есть ссылка, формируем строку с названием и ссылкой
+                if link:
+                    prize_links.append(snippet['link'].format(text=name, link=link))
+                else:
+                    prize_links.append(name)
+            
+            # Объединяем все призы для текущего места через '+'
+            combined_prizes = ' + '.join(prize_links)
+            
+            # Формируем строку с информацией о призе
             if now() > giveaways[promo_id]['expire']:
-                prize_text = f"#{i+1} {nm} ({translate[cache['lang']]['process_callback_giveaway'][11]}{prize['winner_id']})"
+                prize_text = f"#{i+1} {combined_prizes} ({translate[cache['lang']]['process_callback_giveaway'][11]}{prize['winner_id']})"
             else:
-                prize_text = f"#{i+1} {nm} ({translate[cache['lang']]['process_callback_giveaway'][10]}{prize['owner_id']})"
+                prize_text = f"#{i+1} {combined_prizes} ({translate[cache['lang']]['process_callback_giveaway'][10]}{' + '.join(prize['owner_id'])})"
+            
             prize_texts.append(prize_text)
+
         
         text += snippet['quote'].format(text='\n'.join(prize_texts))
     else:
