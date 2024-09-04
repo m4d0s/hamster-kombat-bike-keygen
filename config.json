@@ -105,7 +105,7 @@
             ],
             "RETRY": 13,
             "DISABLED": false,
-            "ALGORITMV0": false
+            "ALGORITMV0": true
         },
         "MAT": {
             "NAME": "Mow and Trim",
@@ -140,7 +140,7 @@
                 25000
             ],
             "RETRY": 13,
-            "DISABLED": false,
+            "DISABLED": true,
             "ALGORITMV0": false
         },
         "ZOO": {
@@ -164,7 +164,31 @@
                 47000
             ],
             "RETRY": 7,
-            "DISABLED": false,
+            "DISABLED": true,
+            "ALGORITMV0": false
+        },
+        "FLUFF": {
+            "NAME": "Fluff Crusade",
+            "APP_TOKEN": "112887b0-a8af-4eb2-ac63-d82df78283d9",
+            "PROMO_ID": "112887b0-a8af-4eb2-ac63-d82df78283d9",
+            "EVENTS_DELAY": [
+                120000,
+                127000
+            ],
+            "RETRY": 3,
+            "DISABLED": true,
+            "ALGORITMV0": false
+        },
+        "TILE": {
+            "NAME": "Tile Trio",
+            "APP_TOKEN": "e68b39d2-4880-4a31-b3aa-0393e7df10c7",
+            "PROMO_ID": "e68b39d2-4880-4a31-b3aa-0393e7df10c7",
+            "EVENTS_DELAY": [
+                20000,
+                27000
+            ],
+            "RETRY": 13,
+            "DISABLED": true,
             "ALGORITMV0": false
         }
     }
