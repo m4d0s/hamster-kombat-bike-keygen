@@ -15,7 +15,6 @@
     "DEBUG_GAME": "C0D3",
     "GEN_PROXY": 40,
     "IPV6": "::1",
-    "IPV6_PORT": 10391,
     "PROXY": [],
     "SCHEMAS": {
         "HAMSTER": "hamster-kombat-keys",
