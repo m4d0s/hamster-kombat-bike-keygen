@@ -163,49 +163,98 @@ async def manage_ipv6_address(ip_addr, interface='ens3', only_del=False):
 def ensure_sysctl_config(file_path, configs):
     if platform.system() != 'Linux':
         return
+
     try:
-        # Read existing configuration file
+        # Read the existing configuration file
+        already = {}
         with open(file_path, 'r') as file:
-            existing_lines = file.read()
-        
-        # Append missing configurations
-        with open(file_path, 'a') as file:
-            for key, value in configs.items():
-                config_line = f"{key} = {value}\n"
-                if config_line not in existing_lines:
-                    logger.info(f"Adding missing configuration: {config_line.strip()}")
+            existing_lines = file.readlines()
+            for line in existing_lines:
+                # Skip comments and empty lines
+                stripped_line = line.strip()
+                if stripped_line.startswith('#') or not stripped_line:
+                    continue
+                
+                # Safely split lines by '=', handling cases with comments
+                if '=' in stripped_line:
+                    key, value = stripped_line.split('=', 1)
+                    already[key.strip()] = value.split('#', 1)[0].strip()  # Split off any comments after '#'
+
+        # Update or add missing configurations
+        modified = False
+        for key, value in configs.items():
+            if key not in already or already[key] != value:
+                already[key] = value
+                modified = True
+
+        # If modifications were made, write back to the file
+        if modified:
+            with open(file_path, 'w') as file:
+                for key, value in already.items():
+                    config_line = f"{key} = {value}\n"
                     file.write(config_line)
-        
-        # Apply the new configurations
-        os.system("sysctl -p")
-        logger.info("Configuration applied successfully.")
+                    logger.info(f"Updating or adding configuration: {config_line.strip()}")
+
+            # Apply the new configurations
+            os.system("sysctl -p")
+            logger.info("Configuration applied successfully.")
+        else:
+            logger.info("No configuration changes needed.")
     
     except IOError as e:
-        logger.info(f"Error reading or writing the file: {e}")
+        logger.error(f"Error reading or writing the file: {e}")
+
+async def remove_ipv6_address(ip, interface, semaphore):
+    async with semaphore:
+        # Удаляем IPv6 адрес
+        process = await asyncio.create_subprocess_shell(
+            f"sudo ip -6 addr del {ip} dev {interface}",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await process.communicate()
+
+        if process.returncode == 0:
+            logger.debug(f"Successfully removed IPv6 address: {ip}")
+        else:
+            logger.error(f"Failed to remove IPv6 address {ip}: {stderr.decode().strip()}")
 
 async def clear_ipv6_interface(interface='ens3', mask=128):
+    semaphore = asyncio.Semaphore(8)
+
     try:
-        # Get the list of IPv6 addresses with /128 mask
+        # Получаем список всех IPv6 адресов на интерфейсе
         proc = await asyncio.create_subprocess_shell(
-            f"ip -6 addr show dev {interface} | grep '/{mask}' | awk '{{print $2}}'",
+            f"ip -6 addr show dev {interface}",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
         stdout, stderr = await proc.communicate()
+
         if proc.returncode != 0:
-            logger.info(f"Error fetching IPv6 addresses: {stderr.decode().strip()}")
+            logger.error(f"Error fetching IPv6 addresses: {stderr.decode().strip()}")
             return
 
-        ipv6_addresses = stdout.strip().split('\n')
+        # Извлекаем адреса с маской /128
+        ipv6_addresses = [
+            line.split()[1]
+            for line in stdout.decode().splitlines()
+            if f'/{mask}' in line
+        ]
 
-        # Remove each IPv6 address found
-        for ip in ipv6_addresses:
-            if ip:
-                logger.debug(f"Removing IPv6 address: {ip} from interface {interface}")
-                await asyncio.create_subprocess_shell(f"sudo ip -6 addr del {ip} dev {interface}")
+        if not ipv6_addresses:
+            logger.info(f"No IPv6 addresses with /{mask} mask found on {interface}.")
+            return
+
+        # Запускаем удаление адресов с ограничением на количество одновременно выполняемых задач
+        tasks = [remove_ipv6_address(ip, interface, semaphore) for ip in ipv6_addresses]
+        await asyncio.gather(*tasks)
+
+        logger.info(f"Successfully removed IPv6 addresses from interface {interface}")
 
     except Exception as e:
-        logger.info(f"An error occurred: {e}")
+        logger.error(f"An error occurred: {e}")
+    
     finally:
         await delete_all_proxy_by_v(v='ipv6')
 
