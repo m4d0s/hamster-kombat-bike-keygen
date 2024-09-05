@@ -160,50 +160,57 @@ async def manage_ipv6_address(ip_addr, interface='ens3', only_del=False):
 
 
 def ensure_sysctl_config(file_path, configs):
-    if not platform.system() == 'Linux':
+    if platform.system() != 'Linux':
         return
     try:
-        # Чтение существующего файла конфигурации
+        # Read existing configuration file
         with open(file_path, 'r') as file:
             existing_lines = file.read()
         
-        # Открываем файл в режиме добавления
+        # Append missing configurations
         with open(file_path, 'a') as file:
             for key, value in configs.items():
-                # Формируем строку конфигурации
                 config_line = f"{key} = {value}\n"
-                # Проверяем наличие строки в файле
                 if config_line not in existing_lines:
                     logger.info(f"Adding missing configuration: {config_line.strip()}")
                     file.write(config_line)
-                    
-        # Применение изменений
+        
+        # Apply the new configurations
         os.system("sysctl -p")
         logger.info("Configuration applied successfully.")
     
     except IOError as e:
         logger.info(f"Error reading or writing the file: {e}")
 
-def clear_ipv6_interface(interface='ens3', mask=128):
+async def clear_ipv6_interface(interface='ens3', mask=128):
     try:
-        # Получаем список всех IPv6 адресов с маской /128 на интерфейсе
-        result = subprocess.run(
+        # Get the list of IPv6 addresses with /128 mask
+        proc = await asyncio.create_subprocess_shell(
             f"ip -6 addr show dev {interface} | grep '/{mask}' | awk '{{print $2}}'",
-            shell=True, capture_output=True, text=True
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
         )
-        ipv6_addresses = result.stdout.strip().split('\n')
-        
+        stdout, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            logger.info(f"Error fetching IPv6 addresses: {stderr.decode().strip()}")
+            return
+
+        ipv6_addresses = stdout.strip().split('\n')
+
+        # Remove each IPv6 address found
         for ip in ipv6_addresses:
             if ip:
-                logger.debug(f"Удаляю IPv6 адрес: {ip} с интерфейса {interface}")
-                subprocess.run(f"sudo ip -6 addr del {ip} dev {interface}", shell=True)
-    
+                logger.debug(f"Removing IPv6 address: {ip} from interface {interface}")
+                await asyncio.create_subprocess_shell(f"sudo ip -6 addr del {ip} dev {interface}")
+
     except Exception as e:
-        logger.info(f"Произошла ошибка: {e}")
+        logger.info(f"An error occurred: {e}")
+    finally:
+        await delete_all_proxy_by_v(v='ipv6')
 
 
 async def prepare():
-    # Конфигурации для добавления
+    # Sysctl configurations to ensure
     sysctl_configs = {
         "net.ipv6.conf.ens3.proxy_ndp": "1",
         "net.ipv6.conf.all.proxy_ndp": "1",
@@ -213,21 +220,32 @@ async def prepare():
         "net.ipv6.route.max_size": "409600",
     }
 
-    # Путь к файлу sysctl.conf
+    # Path to sysctl.conf
     sysctl_conf_file = '/etc/sysctl.conf'
 
-    # Обеспечить наличие конфигураций
+    # Ensure sysctl configurations are set
     ensure_sysctl_config(sysctl_conf_file, sysctl_configs)
-    clear_ipv6_interface()
-    await delete_all_proxy_by_v(v='ipv6')
+
+    # Clear existing IPv6 addresses on the interface
+    await clear_ipv6_interface()
+
+    # Semaphore for limiting concurrent tasks
     sema = asyncio.Semaphore(32)
+
+    # Assuming ipv6_mask and ipv6_count are defined elsewhere
+    tasks = []
     if ipv6_mask and not is_local_address(ipv6_mask):
-        tasks = []
         async with sema:
-            task = asyncio.create_task(generate_ipv6(ipv6_mask))
-            tasks.append(task)
-        while any(not t.done() for t in tasks):
-            logger.info(f'Addresses added: {len([t.done for t in tasks])}/{ipv6_count}')
-            await asyncio.sleep(1)
-        for t in tasks:
-            await set_proxy({t.result():False}, v='ipv6')
+            for _ in range(ipv6_count):
+                task = asyncio.create_task(generate_ipv6(ipv6_mask))
+                tasks.append(task)
+
+    # Track task completion
+    while any(not t.done() for t in tasks):
+        completed_tasks = sum(1 for t in tasks if t.done())
+        logger.info(f'Addresses added: {completed_tasks}/{ipv6_count}')
+        await asyncio.sleep(1)
+
+    # Apply proxy settings once all tasks are done
+    for t in tasks:
+        await set_proxy({t.result(): False}, v='ipv6')
