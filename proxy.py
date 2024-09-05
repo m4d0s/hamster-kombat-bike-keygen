@@ -72,7 +72,7 @@ async def set_proxy(proxies:dict, pool=POOL, v='ipv4'):
     async with pool.acquire() as conn:
         async with conn.transaction():
             for proxy in proxies:
-                if proxy.get('link', None) is None or proxy.get('version', None) == 'local':
+                if proxy:
                     await conn.execute(f'''
                         INSERT INTO "{SCHEMAS["CONFIG"]}".proxy (link, work, time, version)
                         VALUES ($1, $2, $3, $4)
