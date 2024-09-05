@@ -216,6 +216,7 @@ async def prepare():
     # Обеспечить наличие конфигураций
     ensure_sysctl_config(sysctl_conf_file, sysctl_configs)
     clear_ipv6_interface()
+    await delete_all_proxy_by_v(v='ipv6')
     if ipv6_mask and not is_local_address(ipv6_mask):
         tasks = [asyncio.create_task(generate_ipv6(ipv6_mask)) for _ in range(ipv6_count)]
         while any(not t.done() for t in tasks):
