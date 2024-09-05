@@ -66,18 +66,19 @@ async def delete_all_proxy_by_v(v='ipv6', pool=POOL):
             await conn.execute(f'DELETE FROM "{SCHEMAS["CONFIG"]}".proxy WHERE version = $1', v)
 
 async def set_proxy(proxies:dict, pool=POOL, v='ipv4'):
-    if pool is None:
+    if pool is None or not proxies:
         pool = await get_pool()  # Получаем пул соединений, если он не был передан
 
     async with pool.acquire() as conn:
         async with conn.transaction():
             for proxy in proxies:
-                await conn.execute(f'''
-                    INSERT INTO "{SCHEMAS["CONFIG"]}".proxy (link, work, time, version)
-                    VALUES ($1, $2, $3, $4)
-                    ON CONFLICT (link) DO UPDATE
-                    SET work = EXCLUDED.work, time = EXCLUDED.time, version = EXCLUDED.version
-                ''', proxy, proxies[proxy], now(), v)       
+                if proxy.get('link', None) is None or proxy.get('version', None) == 'local':
+                    await conn.execute(f'''
+                        INSERT INTO "{SCHEMAS["CONFIG"]}".proxy (link, work, time, version)
+                        VALUES ($1, $2, $3, $4)
+                        ON CONFLICT (link) DO UPDATE
+                        SET work = EXCLUDED.work, time = EXCLUDED.time, version = EXCLUDED.version
+                    ''', proxy, proxies[proxy], now(), v)       
 
 async def get_free_proxy(pool=POOL):
     if pool is None:
