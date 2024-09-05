@@ -297,5 +297,8 @@ async def prepare():
                 await asyncio.sleep(1)
 
     # Apply proxy settings once all tasks are done
+    proxies = {}
     for t in tasks:
-        await set_proxy({t.result(): False}, v='ipv6')
+        link = t.result()
+        proxies[link] = False
+    await set_proxy(proxies, v='ipv6')
