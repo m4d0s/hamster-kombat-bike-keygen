@@ -10,7 +10,7 @@ pip3 install -r req.txt
 python3 main.py &
 
 # Ждем 15 секунд
-sleep 30
+sleep 300
 
 # Запускаем solo.py в фоне
 python3 solo.py &
