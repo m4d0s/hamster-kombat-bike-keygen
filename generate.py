@@ -150,6 +150,7 @@ async def get_key(session, game_key, pool=None):
         return await _make_request(session, proxy, game_key, pool)
 
 async def _make_request(session, proxy, game_key, pool = None):
+    promo_code = None
     try:
         game_config = config['EVENTS'][game_key]
         delay_ms = random.randint(config['EVENTS'][game_key]['EVENTS_DELAY'][0], config['EVENTS'][game_key]['EVENTS_DELAY'][1]) \
