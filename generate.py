@@ -7,7 +7,7 @@ import uuid
 import os
 import socket
 from database import log_timestamp
-from proxy import get_free_proxy, set_proxy, is_local_address, prepare
+from proxy import get_free_proxy, set_proxy, is_local_address
 
 # Load configuration
 config = json.loads(open('config.json').read())
@@ -130,11 +130,10 @@ def generate_debug_key() -> str:
 
 async def get_key(session, game_key, pool=None):
     proxy = await get_free_proxy(pool)
-    if not proxy and not is_local_address(ipv6_mask):
-        await prepare()
     logger.debug(f'Fetching {game_key}...')
-    if ipv6_mask and not is_local_address(ipv6_mask):
-        proxy = await get_free_proxy(pool)
+    if not proxy:
+        proxy = {'link': None, 'version': 'local'}
+    if ipv6_mask and not is_local_address(ipv6_mask) and proxy['link'] is not None:
         ipv6_addr = proxy['link']
         connector = aiohttp.TCPConnector(ssl=False, local_addr=(ipv6_addr, 0, 0, 0), family=socket.AddressFamily.AF_INET6)
         async with aiohttp.ClientSession(connector=connector) as session:
