@@ -241,11 +241,11 @@ async def prepare():
                 task = asyncio.create_task(generate_ipv6(ipv6_mask), name=f'ipv6_gen{_}')
                 tasks.append(task)
 
-    # Track task completion
-    while any(not t.done() for t in tasks):
-        completed_tasks = sum(1 for t in tasks if t.done())
-        logger.info(f'Addresses added: {completed_tasks}/{ipv6_count} ({ipv6_count * 3 // 2})')
-        await asyncio.sleep(1)
+            # Track task completion
+            while any(not t.done() for t in tasks):
+                completed_tasks = sum(1 for t in tasks if t.done())
+                logger.info(f'Addresses added: {completed_tasks}/{ipv6_count} ({ipv6_count * 3 // 2})')
+                await asyncio.sleep(1)
 
     # Apply proxy settings once all tasks are done
     for t in tasks:
