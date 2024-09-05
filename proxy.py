@@ -117,7 +117,6 @@ def is_local_address(ipv6_address):
         return True
     return False
 
-#prepare
 async def generate_ipv6(mask):
     network = ipaddress.IPv6Network(mask)
     network_address = int(network.network_address)
@@ -125,36 +124,40 @@ async def generate_ipv6(mask):
     random_offset = random.randint(0, num_addresses - 1)
     random_ipv6_address = str(ipaddress.IPv6Address(network_address + random_offset))
     await manage_ipv6_address(random_ipv6_address)
-    return str(random_ipv6_address)
+    return random_ipv6_address
 
-async def manage_ipv6_address(ip_addr, interface = 'ens3', only_del = False):
+async def manage_ipv6_address(ip_addr, interface='ens3', only_del=False):
     current_platform = platform.system()
     succeed = False
-    
-    def execute_command(command):
-        try:
-            subprocess.run(command, check=True, shell=True)
-        except subprocess.CalledProcessError as e:
-            logger.info(f"Command failed: {e}")
-    
+
+    async def execute_command(command):
+        proc = await asyncio.create_subprocess_shell(
+            command,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE
+        )
+        stdout, stderr = await proc.communicate()
+        if proc.returncode != 0:
+            logger.info(f"Command failed: {stderr.decode().strip()}")
+
     if current_platform == 'Linux':
-        # Linux команды
         if only_del:
-            execute_command(f"sudo ip -6 addr del {ip_addr} dev {interface} || true")
-        execute_command(f"sudo ip -6 addr add {ip_addr} dev {interface}")
+            await execute_command(f"sudo ip -6 addr del {ip_addr} dev {interface} || true")
+        await execute_command(f"sudo ip -6 addr add {ip_addr} dev {interface}")
         succeed = True
-    
+
     elif current_platform == 'Windows':
-        # Windows команды
         if only_del:
-            execute_command(f"netsh interface ipv6 delete address \"{interface}\" {ip_addr}")
-        execute_command(f"netsh interface ipv6 add address \"{interface}\" {ip_addr}")
+            await execute_command(f"netsh interface ipv6 delete address \"{interface}\" {ip_addr}")
+        await execute_command(f"netsh interface ipv6 add address \"{interface}\" {ip_addr}")
         succeed = True
     else:
         logger.info(f"Unsupported platform: {current_platform}")
-    
+
     if succeed:
-        await asyncio.sleep(2)
+        # Adjust or remove sleep as per your need
+        await asyncio.sleep(0.5)  # Reduced sleep for faster execution
+
 
 def ensure_sysctl_config(file_path, configs):
     if not platform.system() == 'Linux':
