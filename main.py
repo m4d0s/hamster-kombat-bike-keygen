@@ -23,7 +23,6 @@ async def on_startup():
 
     # Обновление кэша пользователей
     users_id = await update_cache_process(POOL)
-    await delete_all_proxy_by_v(pool=POOL)
     logger.info('Free all proxies from work...')
     
     # Подготовка таймеров розыгрышей
