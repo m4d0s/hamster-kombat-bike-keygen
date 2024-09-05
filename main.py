@@ -32,7 +32,7 @@ async def on_startup():
 
     # Обновление статуса прокси
     await update_proxy_work(POOL)
-    await prepare()
+    await (prepare())
     logger.info("Send warning message to everyone who tried to generate key before....")
 
     # Подготовка сообщения для разработчика
