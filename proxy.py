@@ -230,7 +230,7 @@ async def prepare():
     await clear_ipv6_interface()
 
     # Semaphore for limiting concurrent tasks
-    sema = asyncio.Semaphore(32)
+    sema = asyncio.Semaphore(8)
 
     # Assuming ipv6_mask and ipv6_count are defined elsewhere
     tasks = []
@@ -243,7 +243,7 @@ async def prepare():
     # Track task completion
     while any(not t.done() for t in tasks):
         completed_tasks = sum(1 for t in tasks if t.done())
-        logger.info(f'Addresses added: {completed_tasks}/{ipv6_count}')
+        logger.info(f'Addresses added: {completed_tasks}/{ipv6_count} ({ipv6_count * 3 // 2})')
         await asyncio.sleep(1)
 
     # Apply proxy settings once all tasks are done
