@@ -166,7 +166,7 @@
         "Check", "< Back to tasks", "You have already received an additional generation for this task",
         "✅ Completed", "Subscribe",
         "(id {id}) We could not find chat {num} for the task \"{task}\", so it has been removed\n{link}",
-        "(id {id}) We could not access the list {num} for the task \"{task}\", so the task check is removed{link}"],
+        "(id {id}) We could not access the list {num} for the task \"{task}\", so the task check is removed\n{link}"],
         "check_task_message": ["You have already completed this task"],
         "process_callback_other_games": ["In development, stay tuned for updates :)"],
         "send_task_example": ["Write the text according to the following template (multilingual support available):",

@@ -153,7 +153,7 @@
             ],
             "RETRY": 13,
             "DISABLED": false,
-            "ALGORITMV0": false
+            "ALGORITMV0": true
         },
         "GANG": {
             "NAME": "Gang Wars",
@@ -176,7 +176,7 @@
                 127000
             ],
             "RETRY": 3,
-            "DISABLED": true,
+            "DISABLED": false,
             "ALGORITMV0": false
         },
         "TILE": {
@@ -188,7 +188,7 @@
                 27000
             ],
             "RETRY": 13,
-            "DISABLED": true,
+            "DISABLED": false,
             "ALGORITMV0": false
         }
     }

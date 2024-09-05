@@ -1,15 +1,51 @@
-import socket
-import psutil
 import ipaddress
 import platform
 import random
-import aiohttp
 import asyncio
 import json
-import http.server
-import socketserver
-import threading
-from database import get_pool, SCHEMAS, now, POOL
+import os
+import logging
+import subprocess
+from database import get_pool, SCHEMAS, now, POOL, log_timestamp
+
+def get_logger(file_level=logging.INFO, base_level=logging.DEBUG):
+    # Создаем логгер
+    # asyncio.get_event_loop().set_debug(config['DEBUG_LOG'])
+    logger = logging.getLogger("logger")
+    logger.setLevel(base_level)  # Устанавливаем базовый уровень логирования
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+    # Проверяем, есть ли уже обработчики, и если да, удаляем их
+    if logger.hasHandlers():
+        logger.handlers.clear()
+
+    # Создаем каталог для логов, если он не существует
+    log_dir = 'logs'
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+
+    # Создаем обработчик для записи в файл
+    file_handler = logging.FileHandler(f'{log_dir}/{log_timestamp()}.log')
+    file_handler.setLevel(file_level)
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+
+    # Создаем обработчик для вывода в консоль
+    console_handler = logging.StreamHandler()
+    console_lvl = logging.DEBUG if config['DEBUG_LOG'] else logging.INFO
+    console_handler.setLevel(console_lvl)
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+
+    logger.debug("Logger setup sucessfull!\n\tBase log level: %s, Console log level: %s, File log level: %s", 
+                 base_level, console_lvl, file_level)
+
+    return logger
+
+config = json.load(open('config.json', 'r', encoding='utf-8'))
+ipv6_mask = config['IPV6']
+logger = get_logger()
+ipv6_list, ipv6_count = [], 1024
 
 json_config = json.loads(open('config.json').read())
 
@@ -46,12 +82,9 @@ async def set_proxy(proxies:dict, pool=POOL):
 async def get_free_proxy(pool=POOL):
     if pool is None:
         pool = await get_pool()  # Получаем пул соединений, если он не был передан
-    
-    # if json_config['IPV6_PORT'] > 0:
-    #     ipv6_address = start_proxy()
-    #     if ipv6_address and ipv6_address[3] != 0:
-    #         return {'link': f'http://[{ipv6_address[1]}:{ipv6_address[3]}]', #:{ipv6_address[3]}', 
-    #                 'work': False,    'version': 'ipv6'}
+        
+    if ipv6_mask and not is_local_address(ipv6_mask):
+        return {'link': get_from_list(), 'work': False, 'version': 'ipv6'}
         
 
     async with pool.acquire() as conn:
@@ -72,122 +105,122 @@ async def get_free_proxy(pool=POOL):
 
     return {'link': proxy['link'], 'work': proxy['work'], 'version': 'ipv4'} if proxy else None
 
-# class MyHandler(http.server.SimpleHTTPRequestHandler):
-#     def do_GET(self):
-#         # Простая обработка GET-запросов
-#         self.send_response(200)
-#         self.send_header("Content-type", "text/plain")
-#         self.end_headers()
-#         self.wfile.write(b"Hello, world!")
+def get_from_list():
+    return ipv6_list[random.randint(0, len(ipv6_list) - 1)]
 
-# def start_proxy_server(ipv6_address, port):
-#     handler = MyHandler
-#     server = socketserver.TCPServer((ipv6_address, port), handler)
-#     print(f"Starting proxy server on {ipv6_address}:{port}")
-#     server.serve_forever()
+def is_local_address(ipv6_address):
+    # Проверяем link-local адреса
+    if ipv6_address.startswith('fe80::'):
+        return True
+    # Проверяем loopback адрес
+    if ipv6_address == '::1':
+        return True
+    # Проверяем unique local адреса (ULA)
+    if ipv6_address.startswith('fd') or ipv6_address.startswith('fc'):
+        return True
+    return False
 
-# # Запуск прокси-сервера в отдельном потоке
-# def run_proxy_server(ipv6_address, port):
-#     server_thread = threading.Thread(target=start_proxy_server, args=(ipv6_address, port))
-#     server_thread.daemon = True
-#     server_thread.start()
-#     return server_thread
+#prepare
+async def generate_ipv6(mask):
+    network = ipaddress.IPv6Network(mask)
+    network_address = int(network.network_address)
+    num_addresses = network.num_addresses
+    random_offset = random.randint(0, num_addresses - 1)
+    random_ipv6_address = str(ipaddress.IPv6Address(network_address + random_offset))
+    await manage_ipv6_address(random_ipv6_address)
+    return str(random_ipv6_address)
 
-# async def check_proxy_aiohttp(ipv6_address, port, test_url="https://api.ipify.org"):
-#     proxy_url = f"[{ipv6_address}]:{port}"
-#     proxy = f"http://[{ipv6_address}]:{port}"
-
-#     async with aiohttp.ClientSession() as session:
-#         try:
-#             async with session.get(test_url, proxy=proxy, timeout=10) as response:
-#                 if response.status == 200:
-#                     text = await response.text()
-#                     print(f"Proxy {proxy_url} is working. Public IP: {text}")
-#                     return True
-#                 else:
-#                     print(f"Proxy {proxy_url} failed with status code: {response.status}")
-#         except (aiohttp.ClientError, asyncio.TimeoutError) as e:
-#             print(f"Proxy {proxy_url} failed. Error: {e}")
+async def manage_ipv6_address(ip_addr, interface = 'ens3', only_del = False):
+    current_platform = platform.system()
+    succeed = False
     
-#     return False
-
-# def is_local_address(ipv6_address):
-#     if not ipv6_address:
-#         return False
-#     if ipv6_address.startswith('fe80::') or ipv6_address == '::1':
-#         return True
-#     if ipv6_address.startswith('fd') or ipv6_address.startswith('fc'):
-#         return True
-#     return False
-
-# def get_ipv6_addresses():
-#     ipv6_addresses = []
-#     interfaces = psutil.net_if_addrs()
-
-#     if not is_local_address(json_config.get('IPV6', None)):
-#         return [0, json_config['IPV6'], 'Custom ipv6', json_config['IPV6_PORT']]
+    def execute_command(command):
+        try:
+            subprocess.run(command, check=True, shell=True)
+        except subprocess.CalledProcessError as e:
+            logger.info(f"Command failed: {e}")
     
-#     i = 0
-#     for interface, addrs in interfaces.items():
-#         for addr in addrs:
-#             if addr.family == socket.AF_INET6 and not is_local_address(addr.address): 
-#                 ipv6_addresses.append([i, addr.address, addr.address, json_config['IPV6_PORT']])
-#                 i += 1
-#     if not ipv6_addresses:
-#         raise RuntimeError("No valid IPv6 addresses found")
+    if current_platform == 'Linux':
+        # Linux команды
+        if only_del:
+            execute_command(f"sudo ip -6 addr del {ip_addr} dev {interface} || true")
+        execute_command(f"sudo ip -6 addr add {ip_addr} dev {interface}")
+        succeed = True
     
-#     ipv6_addresses[0][3] = json_config.get('IPV6_PORT', 8080)
-#     return ipv6_addresses[0]
+    elif current_platform == 'Windows':
+        # Windows команды
+        if only_del:
+            execute_command(f"netsh interface ipv6 delete address \"{interface}\" {ip_addr}")
+        execute_command(f"netsh interface ipv6 add address \"{interface}\" {ip_addr}")
+        succeed = True
+    else:
+        logger.info(f"Unsupported platform: {current_platform}")
+    
+    if succeed:
+        await asyncio.sleep(2)
 
-# def generate_alternative_ipv6():
-#     ipv6_address = get_ipv6_addresses()
-#     if ipv6_address[3] == 0:
-#         return ipv6_address
-#     address = ipaddress.IPv6Address(ipv6_address[1])
-#     network_prefix = address.packed[:8]
-#     new_interface_id = random.getrandbits(64).to_bytes(8, byteorder='big')
-#     new_address = ipaddress.IPv6Address(network_prefix + new_interface_id)
-#     ipv6_address[1] = str(new_address)
-#     print(f"Generated IPv6 Address: {ipv6_address[1]}")
-#     return ipv6_address
+def ensure_sysctl_config(file_path, configs):
+    if not platform.system() == 'Linux':
+        return
+    try:
+        # Чтение существующего файла конфигурации
+        with open(file_path, 'r') as file:
+            existing_lines = file.read()
+        
+        # Открываем файл в режиме добавления
+        with open(file_path, 'a') as file:
+            for key, value in configs.items():
+                # Формируем строку конфигурации
+                config_line = f"{key} = {value}\n"
+                # Проверяем наличие строки в файле
+                if config_line not in existing_lines:
+                    logger.info(f"Adding missing configuration: {config_line.strip()}")
+                    file.write(config_line)
+                    
+        # Применение изменений
+        os.system("sysctl -p")
+        logger.info("Configuration applied successfully.")
+    
+    except IOError as e:
+        logger.info(f"Error reading or writing the file: {e}")
 
-# async def apply_iptables_rule(ipv6_address, port):
-#     if platform.system().lower() == 'windows':
-#         print(f"Skipping iptables rule application on Windows for IPv6: {ipv6_address}")
-#         return
-
-#     try:
-#         await asyncio.create_subprocess_exec(
-#             'iptables', '-t', 'nat', '-A', 'PREROUTING', '-p', 'tcp',
-#             '--dport', str(port), '-j', 'DNAT', '--to-destination', f'[{ipv6_address}]:{port}'
-#         )
-#         await asyncio.create_subprocess_exec(
-#             'ip6tables', '-A', 'INPUT', '-d', ipv6_address, '-j', 'ACCEPT'
-#         )
-#         print(f"iptables rule applied for IPv6: {ipv6_address}")
-#     except Exception as e:
-#         print(f"Failed to apply iptables rule: {e}")
-#         raise
-
-# async def start_proxy():
-#     ipv6_info = generate_alternative_ipv6()
-#     if ipv6_info[3] == 0:
-#         return None
-#     await apply_iptables_rule(ipv6_info[1], ipv6_info[3])
-#     return ipv6_info
+def clear_ipv6_interface(interface='ens3', mask=128):
+    try:
+        # Получаем список всех IPv6 адресов с маской /128 на интерфейсе
+        result = subprocess.run(
+            f"ip -6 addr show dev {interface} | grep '/{mask}' | awk '{{print $2}}'",
+            shell=True, capture_output=True, text=True
+        )
+        ipv6_addresses = result.stdout.strip().split('\n')
+        
+        for ip in ipv6_addresses:
+            if ip:
+                logger.info(f"Удаляю IPv6 адрес: {ip} с интерфейса {interface}")
+                subprocess.run(f"sudo ip -6 addr del {ip} dev {interface}", shell=True)
+    
+    except Exception as e:
+        logger.info(f"Произошла ошибка: {e}")
 
 
-# async def main():
-#     ipv6_address = await start_proxy()
+async def prepare():
+    # Конфигурации для добавления
+    sysctl_configs = {
+        "net.ipv6.conf.ens3.proxy_ndp": "1",
+        "net.ipv6.conf.all.proxy_ndp": "1",
+        "net.ipv6.conf.default.forwarding": "1",
+        "net.ipv6.conf.all.forwarding": "1",
+        "net.ipv6.neigh.default.gc_thresh3": "102400",
+        "net.ipv6.route.max_size": "409600",
+    }
 
-#     # Запускаем прокси сервер
-#     run_proxy_server('::', ipv6_address[3])
+    # Путь к файлу sysctl.conf
+    sysctl_conf_file = '/etc/sysctl.conf'
 
-#     # Даем серверу немного времени, чтобы запуститься
-#     await asyncio.sleep(5)
-
-#     # Проверяем прокси
-#     is_working = await check_proxy_aiohttp(ipv6_address[1], ipv6_address[3])
-#     print(f"Is proxy working? {is_working}")
-
-# asyncio.run(main())
+    # Обеспечить наличие конфигураций
+    ensure_sysctl_config(sysctl_conf_file, sysctl_configs)
+    clear_ipv6_interface()
+    if ipv6_mask and not is_local_address(ipv6_mask):
+        tasks = [asyncio.create_task(generate_ipv6(ipv6_mask)) for _ in range(ipv6_count)]
+        while any(not t.done for t in tasks):
+            logger.info(f'Addresses added: {len([t.done for t in tasks])}/{ipv6_count}')
+            await asyncio.sleep(1)

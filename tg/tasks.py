@@ -172,8 +172,8 @@ async def generate_task_message(callback_query: types.CallbackQuery) -> None:
             error_key = 7 
             await send_error_message(
                 message.chat.id, 
-                translate[cache['lang']]['generate_task_message'][error_key]\
-                .format(num=str(current_task['check_id']), task=current_task['name'],
+                translate[cache['lang']]['generate_task_message'][error_key]
+                        .format(num=str(current_task['check_id']), task=current_task['name'],
                         link=current_task['link'], id=str(current_task['id'])),
                 only_dev=True
             )
@@ -206,10 +206,6 @@ async def generate_task_message(callback_query: types.CallbackQuery) -> None:
         InlineKeyboardButton(text=but_text, callback_data=f'check_task_{task_id}'),
         InlineKeyboardButton(text=translate[cache['lang']]['generate_task_message'][5], url=current_task['link']),
     )
-    # if callback_query.id.startswith('from_'):
-    #     id = callback_query.id.split('_')[2]
-    #     keyboard.add(InlineKeyboardButton(text=translate[cache['lang']]['generate_task_message'][2], callback_data=f'giveaway_{id}'))
-    # else:
     keyboard.add(InlineKeyboardButton(text=translate[cache['lang']]['generate_task_message'][2], callback_data='generate_tasks'))
     # Удаляем старое сообщение и отправляем новое
     if cache.get('welcome'):

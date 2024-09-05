@@ -10,6 +10,7 @@ from database import (now, get_promotions, update_proxy_work, get_pool, update_c
 from tg.giveaway import wait_the_giveaway
 from tg.process import update_report
 
+from proxy import prepare
 from c_telegram import db_config, bot, dp
 
 async def on_startup():
@@ -25,6 +26,7 @@ async def on_startup():
     await delete_all_proxy_by_v(pool=POOL)
     logger.info('Free all proxies from work...')
     
+    # Подготовка таймеров розыгрышей
     logger.info("Setup giveaways shredule...")
     promo = await get_promotions(task_type='giveaway', pool=POOL)
     for x in promo:
@@ -32,6 +34,7 @@ async def on_startup():
 
     # Обновление статуса прокси
     await update_proxy_work(POOL)
+    await prepare()
     logger.info("Send warning message to everyone who tried to generate key before....")
 
     # Подготовка сообщения для разработчика
