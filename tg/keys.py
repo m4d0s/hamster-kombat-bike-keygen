@@ -126,8 +126,8 @@ async def generate_key(callback_query: types.CallbackQuery) -> None:
                     '\n'.join([snippet['bold'].format(text=game_key) + ": " + snippet['code'].format(text=k) for k in key if k])
                     if key else translate[cache['lang']]['generate_key'][2]
                 )
-                for k in key:
-                    await insert_key_generation(user_id=message.chat.id, key=k, key_type=game_key, pool=POOL)
+                # for k in key:
+                #     await insert_key_generation(user_id=message.chat.id, key=k, key_type=game_key, pool=POOL)
                 
                 giveaways = await get_promotions(task_type='giveaway', pool=POOL)
                 if giveaways and key:

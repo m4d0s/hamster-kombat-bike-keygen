@@ -10,7 +10,7 @@ from .message import send_error_message, new_message, try_to_delete, try_to_edit
 from .cache import get_cached_data, set_cached_data
 
 from c_telegram import dp, BOT_INFO, bot, snippet, translate, POOL, db_config, json_config
-from database import (get_all_user_ids, now, get_unused_key_of_type, format_remaining_time, delete_user)
+from database import (get_all_user_ids, now, get_unused_key_of_type, format_remaining_time, delete_user, insert_key_generation)
 from generate import generate_loading_bar, get_key, delay, get_logger
 
 logger = get_logger()
@@ -43,6 +43,7 @@ async def update_loadbar(chat_id: int, game_key: str, session: aiohttp.ClientSes
         
         if free_key:
             keys.append(free_key)
+            await insert_key_generation(user_id=cache['user_id'], key=free_key, key_type=game_key, used=True, pool=POOL)
             loadbars[i] = snippet['bold'].format(text=game_key + ": ") + snippet['code'].format(text=free_key)
             continue
         
@@ -75,6 +76,7 @@ async def update_loadbar(chat_id: int, game_key: str, session: aiohttp.ClientSes
         try:
             key = task.result()
             keys.append(key)
+            await insert_key_generation(user_id=cache['user_id'], key=key, key_type=game_key, used=True, pool=POOL)
             loadbars[i] = snippet['bold'].format(text=game_key + ": ") + \
                             snippet['code'].format(text=key or translate[cache['lang']]['update_loadbar'][4])
         except Exception as e:
