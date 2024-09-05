@@ -138,11 +138,11 @@ async def generate_key(callback_query: types.CallbackQuery) -> None:
                     for check in checkers:
                         if checkers[check]['promo_id'] in giveaways_ids:
                             gv_id = str(checkers[check]['promo_id']) ; giveaways_ids.remove(checkers[check]['promo_id'])
-                            give_txt += f"\n{snippet['link'].format(text=giveaways[gv_id][cache['lang']]['name'], link=get_arg_link(int(gv_id)))}: {len(key)} 🎟"
+                            give_txt += f"\n{snippet['link'].format(text=giveaways[str(gv_id)][cache['lang']]['name'], link=get_arg_link(int(gv_id)))}: {len(key)} 🎟"
                             await append_tickets_to(int(check), message.chat.id, len(key), pool=POOL)   
                             
                     for gv_id in giveaways_ids:
-                        give_txt += f"\n{snippet['link'].format(text=giveaways[gv_id][cache['lang']]['name'], link=get_arg_link(gv_id))} ({translate[cache['lang']]['generate_key'][9]})" \
+                        give_txt += f"\n{snippet['link'].format(text=giveaways[str(gv_id)][cache['lang']]['name'], link=get_arg_link(gv_id))} ({translate[cache['lang']]['generate_key'][9]})" \
                                     if giveaways[str(gv_id)]['expire'] > now() > giveaways[str(gv_id)]['time'] else ''
                                     
                     key_text += give_txt

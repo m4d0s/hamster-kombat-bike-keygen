@@ -45,7 +45,7 @@ def get_logger(file_level=logging.INFO, base_level=logging.DEBUG):
 config = json.load(open('config.json', 'r', encoding='utf-8'))
 ipv6_mask = config['IPV6']
 logger = get_logger()
-ipv6_list, ipv6_count = [], 1024
+ipv6_count = config['GEN_PROXY']
 
 json_config = json.loads(open('config.json').read())
 
@@ -65,7 +65,7 @@ async def delete_all_proxy_by_v(v='ipv6', pool=POOL):
         async with conn.transaction():
             await conn.execute(f'DELETE FROM "{SCHEMAS["CONFIG"]}".proxy WHERE version = $1', v)
 
-async def set_proxy(proxies:dict, pool=POOL):
+async def set_proxy(proxies:dict, pool=POOL, v='ipv4'):
     if pool is None:
         pool = await get_pool()  # Получаем пул соединений, если он не был передан
 
@@ -73,40 +73,37 @@ async def set_proxy(proxies:dict, pool=POOL):
         async with conn.transaction():
             for proxy in proxies:
                 await conn.execute(f'''
-                    INSERT INTO "{SCHEMAS["CONFIG"]}".proxy (link, work, time)
-                    VALUES ($1, $2, $3)
+                    INSERT INTO "{SCHEMAS["CONFIG"]}".proxy (link, work, time, version)
+                    VALUES ($1, $2, $3, $4)
                     ON CONFLICT (link) DO UPDATE
-                    SET work = EXCLUDED.work, time = EXCLUDED.time
-                ''', proxy, proxies[proxy], now())       
+                    SET work = EXCLUDED.work, time = EXCLUDED.time, version = EXCLUDED.version
+                ''', proxy, proxies[proxy], now(), v)       
 
 async def get_free_proxy(pool=POOL):
     if pool is None:
         pool = await get_pool()  # Получаем пул соединений, если он не был передан
-        
+    version = 'ipv4'
     if ipv6_mask and not is_local_address(ipv6_mask):
-        return {'link': get_from_list(), 'work': False, 'version': 'ipv6'}
+        version = 'ipv6'
         
 
     async with pool.acquire() as conn:
         async with conn.transaction():
             proxy = await conn.fetchrow(f'''
                 SELECT link, work FROM "{SCHEMAS["CONFIG"]}".proxy
-                WHERE work = false LIMIT 1
+                WHERE work = false and version = '{version}' LIMIT 1
             ''')
 
             if not proxy:
                 proxy = await conn.fetchrow(f'''
                     SELECT link, work FROM "{SCHEMAS["CONFIG"]}".proxy
-                    WHERE version = 'ipv4' ORDER BY RANDOM() LIMIT 1
+                    WHERE version = '{version}' ORDER BY RANDOM() LIMIT 1
                 ''')
 
             if proxy:
-                await set_proxy({proxy['link']: True}, pool=pool)
+                await set_proxy({proxy['link']: True}, pool=pool, v=version)
 
-    return {'link': proxy['link'], 'work': proxy['work'], 'version': 'ipv4'} if proxy else None
-
-def get_from_list():
-    return ipv6_list[random.randint(0, len(ipv6_list) - 1)]
+    return {'link': proxy['link'], 'work': proxy['work'], 'version': version} if proxy else None
 
 def is_local_address(ipv6_address):
     # Проверяем link-local адреса
@@ -195,7 +192,7 @@ def clear_ipv6_interface(interface='ens3', mask=128):
         
         for ip in ipv6_addresses:
             if ip:
-                logger.info(f"Удаляю IPv6 адрес: {ip} с интерфейса {interface}")
+                logger.debug(f"Удаляю IPv6 адрес: {ip} с интерфейса {interface}")
                 subprocess.run(f"sudo ip -6 addr del {ip} dev {interface}", shell=True)
     
     except Exception as e:
@@ -221,6 +218,8 @@ async def prepare():
     clear_ipv6_interface()
     if ipv6_mask and not is_local_address(ipv6_mask):
         tasks = [asyncio.create_task(generate_ipv6(ipv6_mask)) for _ in range(ipv6_count)]
-        while any(not t.done for t in tasks):
+        while any(not t.done() for t in tasks):
             logger.info(f'Addresses added: {len([t.done for t in tasks])}/{ipv6_count}')
             await asyncio.sleep(1)
+        for t in tasks:
+            await set_proxy({t.result():False}, v='ipv6')

@@ -5,13 +5,15 @@ import asyncio
 import aiohttp
 import uuid
 import os
+import socket
 from database import log_timestamp
-from proxy import get_free_proxy, set_proxy
+from proxy import get_free_proxy, set_proxy, is_local_address, prepare
 
 # Load configuration
 config = json.loads(open('config.json').read())
 farmed_keys, attempts = 0, {}
 users = [x for x in config['EVENTS']]
+ipv6_mask = config['IPV6']
 
 
 async def check_proxy(proxy: str, test_url: str = 'http://httpbin.org/ip', timeout: int = 10, retries: int = 4) -> bool:
@@ -95,8 +97,8 @@ async def fetch_api(session: aiohttp.ClientSession, path: str, body: dict, auth:
     if not proxy or len(proxy) == 0:
         logger.warning('No proxy found, use localhost (no proxy)')
     else:
-        logger.debug(f'Using proxy: {proxy["link"].split("@")[1] if "@" in proxy["link"] else proxy["link"].split("://")[1]} ({proxy["link"].split(":")[0].upper()})')
-    proxy_str = proxy['link'] if proxy else None
+        logger.debug(f'Using proxy: {proxy["link"].split("@")[1] if "@" in proxy["link"] else proxy["link"]} ({proxy["link"].split(":")[0].upper()})')
+    proxy_str = proxy['link'] if proxy and proxy['version'] == 'ipv4' else None
 
     try:
         async with session.post(url, headers=headers, json=body, proxy=proxy_str) as res:
@@ -107,8 +109,7 @@ async def fetch_api(session: aiohttp.ClientSession, path: str, body: dict, auth:
 
             if not res.ok:
                 await delay(config['DELAY'] * 1000, "API error")
-                if not proxy['version'] == 'ipv6':
-                    await set_proxy({proxy['link']: False})
+                await set_proxy({proxy['link']: False}, v=proxy['version'])
                 if str(res.status) == '400':
                     logger.debug(f'Response: {res.status} {res.reason}')
                 else:
@@ -128,67 +129,75 @@ def generate_debug_key() -> str:
     return config['DEBUG_KEY'] + '-' + ''.join(random.choice(symbols) for _ in range(10))
 
 async def get_key(session, game_key, pool=None):
-    
-    logger.debug(f'Fetching {game_key}...')
     proxy = await get_free_proxy(pool)
+    if not proxy and not is_local_address(ipv6_mask):
+        await prepare()
+    logger.debug(f'Fetching {game_key}...')
+    if ipv6_mask and not is_local_address(ipv6_mask):
+        proxy = await get_free_proxy(pool)
+        ipv6_addr = proxy['link']
+        connector = aiohttp.TCPConnector(ssl=False, local_addr=(ipv6_addr, 0, 0, 0), family=socket.AddressFamily.AF_INET6)
+        async with aiohttp.ClientSession(connector=connector) as session:
+            return await _make_request(session, proxy, game_key, pool)
     promo_code = None
     
     if config['DEBUG']:
         promo_code = generate_debug_key()
         game_key = config['DEBUG_GAME']
         await asyncio.sleep((random.random() * 5) + 5)
-    
+        return promo_code
     else:   
-        try:
-            game_config = config['EVENTS'][game_key]
-            delay_ms = random.randint(config['EVENTS'][game_key]['EVENTS_DELAY'][0], config['EVENTS'][game_key]['EVENTS_DELAY'][1]) \
-                if not config['EVENTS'][game_key]['ALGORITMV0'] \
-                        else random.randint(1000, 2000)
-            attempts = game_config['RETRY'] if not config['EVENTS'][game_key]['ALGORITMV0'] \
-                        else config['V0_RETRY']
-            client_id = str(uuid.uuid4())
+        return await _make_request(session, proxy, game_key, pool)
+
+async def _make_request(session, proxy, game_key, pool = None):
+    try:
+        game_config = config['EVENTS'][game_key]
+        delay_ms = random.randint(config['EVENTS'][game_key]['EVENTS_DELAY'][0], config['EVENTS'][game_key]['EVENTS_DELAY'][1]) \
+            if not config['EVENTS'][game_key]['ALGORITMV0'] \
+                    else random.randint(1000, 2000)
+        attempts = game_config['RETRY'] if not config['EVENTS'][game_key]['ALGORITMV0'] \
+                    else config['V0_RETRY']
+        client_id = str(uuid.uuid4())
+
+        body = {
+            'appToken': game_config['APP_TOKEN'],
+            'clientId': client_id,
+            'clientOrigin': ['ios', 'android'].pop(random.randint(0, 1))
+        }
+        login_client_data = await fetch_api(session, '/promo/login-client', body, proxy=proxy)
+        await delay(delay_ms, "Login delay")
+        
+        if not login_client_data:
+            raise Exception("Failed to login: no data")
+        auth_token = login_client_data['clientToken']
+        
+        for attempt in range(attempts):
+            # delay(config['DELAY'] * 1000)
+            logger.debug(f"Attempt {attempt + 1} of {attempts} for {game_key}...")
+            body = {
+                'promoId': game_config['PROMO_ID'],
+                'eventId': str(uuid.uuid4()),
+                'eventOrigin': 'undefined'
+            }
+            register_event_data = await fetch_api(session, '/promo/register-event', body, auth_token, proxy=proxy)
+
+            if register_event_data and not register_event_data.get('hasCode'):
+                await delay(delay_ms, "Event delay")
+                continue
 
             body = {
-                'appToken': game_config['APP_TOKEN'],
-                'clientId': client_id,
-                'clientOrigin': ['ios', 'android'].pop(random.randint(0, 1))
+                'promoId': game_config['PROMO_ID'],
             }
-            login_client_data = await fetch_api(session, '/promo/login-client', body, proxy=proxy)
-            await delay(delay_ms, "Login delay")
-            
-            if not login_client_data:
-                raise Exception("Failed to login: no data")
-            auth_token = login_client_data['clientToken']
-            
-            for attempt in range(attempts):
-                # delay(config['DELAY'] * 1000)
-                logger.debug(f"Attempt {attempt + 1} of {attempts} for {game_key}...")
-                body = {
-                    'promoId': game_config['PROMO_ID'],
-                    'eventId': str(uuid.uuid4()),
-                    'eventOrigin': 'undefined'
-                }
-                register_event_data = await fetch_api(session, '/promo/register-event', body, auth_token, proxy=proxy)
+            create_code_data = await fetch_api(session, '/promo/create-code', body, auth_token, proxy=proxy)
 
-                if register_event_data and not register_event_data.get('hasCode'):
-                    await delay(delay_ms, "Event delay")
-                    continue
+            if create_code_data and 'promoCode' in create_code_data:
+                promo_code = create_code_data.get('promoCode')
+                if promo_code:
+                    break
 
-                body = {
-                    'promoId': game_config['PROMO_ID'],
-                }
-                create_code_data = await fetch_api(session, '/promo/create-code', body, auth_token, proxy=proxy)
-
-                if create_code_data and 'promoCode' in create_code_data:
-                    promo_code = create_code_data.get('promoCode')
-                    if promo_code:
-                        break
-
-                await delay(delay_ms, "Code delay")
-        except Exception as e:
-            logger.error(f'Error get_key: {e}')
-        finally:
-            if not proxy['version'] == 'ipv6':
-                await set_proxy({proxy['link']: False}, pool=pool)
-
-    return promo_code or None
+            await delay(delay_ms, "Code delay")
+    except Exception as e:
+        logger.error(f'Error get_key: {e}')
+    finally:
+        await set_proxy({proxy['link']: False}, pool=pool, v=proxy['version'])
+        return promo_code or None
