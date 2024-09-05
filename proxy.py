@@ -230,7 +230,7 @@ async def prepare():
     await clear_ipv6_interface()
 
     # Semaphore for limiting concurrent tasks
-    sema = asyncio.Semaphore(8)
+    sema = asyncio.Semaphore(4)
 
     # Assuming ipv6_mask and ipv6_count are defined elsewhere
     tasks = []

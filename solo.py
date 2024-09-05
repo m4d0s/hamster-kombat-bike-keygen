@@ -37,6 +37,7 @@ async def main():
     limit = config['GEN_PROXY']
     semaphore = asyncio.Semaphore(limit)
     await get_pool()
+    logger.info("[!] Mining of keys started now...")
 
     async with aiohttp.ClientSession() as session:
         tasks, i = [], -1
