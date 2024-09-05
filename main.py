@@ -34,23 +34,6 @@ async def on_startup():
     await update_proxy_work(POOL)
     await prepare()
     logger.info("Send warning message to everyone who tried to generate key before....")
-    
-    async def run_solo_script():
-        process = await asyncio.create_subprocess_shell(
-            "python3 solo.py",
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
-        )
-
-        stdout, stderr = await process.communicate()
-
-        if process.returncode == 0:
-            print(f'Success: {stdout.decode()}')
-        else:
-            print(f'Error: {stderr.decode()}')
-
-    # Создание задачи в фоне, её результат можно позже обработать
-    asyncio.create_task(run_solo_script())
 
     # Подготовка сообщения для разработчика
     stop_button = InlineKeyboardMarkup().add(InlineKeyboardButton(text="Main menu", callback_data="main_menu"))
