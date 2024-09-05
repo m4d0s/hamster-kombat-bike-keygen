@@ -236,8 +236,8 @@ async def prepare():
     tasks = []
     if ipv6_mask and not is_local_address(ipv6_mask):
         async with sema:
-            for _ in range(ipv6_count):
-                task = asyncio.create_task(generate_ipv6(ipv6_mask))
+            for _ in range(ipv6_count * 3 // 2):
+                task = asyncio.create_task(generate_ipv6(ipv6_mask), name=f'ipv6_gen{_}')
                 tasks.append(task)
 
     # Track task completion
