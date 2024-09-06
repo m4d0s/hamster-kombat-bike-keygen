@@ -40,38 +40,39 @@ async def update_loadbar(chat_id: int, game_key: str, session: aiohttp.ClientSes
     for i in range(count):
         part_load = 0
         free_key = await get_unused_key_of_type(game_key, pool=POOL)
+        await asyncio.sleep(1)
         
         if free_key:
             keys.append(free_key)
             await insert_key_generation(user_id=cache['user_id'], key=free_key, key_type=game_key, used=True, pool=POOL)
             loadbars[i] = snippet['bold'].format(text=game_key + ": ") + snippet['code'].format(text=free_key)
             continue
-        
-        task = asyncio.create_task(get_key(session, game_key))
-        
-        while not task.done():
-            cache = await get_cached_data(chat_id)
-            if cache['process']:
-                task.cancel()
-                return [key for key in keys if key is not None]
-
-            plus_text = snippet['italic'].format(text=translate[cache['lang']]['update_loadbar'][2]
-                        .format(max=format_remaining_time(now() + max_sec, pref=cache['lang'])))\
-                        if loading > sec else ''
-            mark = "[!] " if loading > sec else ""
-            loadbars[i] = mark + generate_loading_bar(progress=part_load, max=max_sec // count)
-            joined_loadbars = '\n'.join(loadbars)
-            full_text = f"{starting_text}\n\n{joined_loadbars}\n{plus_text}"
-            stop_button = InlineKeyboardMarkup()\
-                         .add(InlineKeyboardButton(text=translate[cache['lang']]['update_loadbar'][3], 
-                                                   callback_data="stop_process"))
-
-            await try_to_edit(full_text, chat_id, cache['loading'], keyboard=stop_button)
+        else:
+            task = asyncio.create_task(get_key(session, game_key))
             
-            delay_s = update_delay + random.random()
-            loading += delay_s
-            part_load += delay_s
-            await delay(delay_s * 1000, f"Update loadbar for {chat_id}")
+            while not task.done():
+                cache = await get_cached_data(chat_id)
+                if cache['process']:
+                    task.cancel()
+                    return [key for key in keys if key is not None]
+
+                plus_text = snippet['italic'].format(text=translate[cache['lang']]['update_loadbar'][2]
+                            .format(max=format_remaining_time(now() + max_sec, pref=cache['lang'])))\
+                            if loading > sec else ''
+                mark = "[!] " if loading > sec else ""
+                loadbars[i] = mark + generate_loading_bar(progress=part_load, max=max_sec // count)
+                joined_loadbars = '\n'.join(loadbars)
+                full_text = f"{starting_text}\n\n{joined_loadbars}\n{plus_text}"
+                stop_button = InlineKeyboardMarkup()\
+                            .add(InlineKeyboardButton(text=translate[cache['lang']]['update_loadbar'][3], 
+                                                    callback_data="stop_process"))
+
+                await try_to_edit(full_text, chat_id, cache['loading'], keyboard=stop_button)
+                
+                delay_s = update_delay + random.random()
+                loading += delay_s
+                part_load += delay_s
+                await delay(delay_s * 1000, f"Update loadbar for {chat_id}")
         
         try:
             key = task.result()
