@@ -44,7 +44,7 @@ async def update_loadbar(chat_id: int, game_key: str, session: aiohttp.ClientSes
         
         if free_key:
             keys.append(free_key)
-            await insert_key_generation(user_id=cache['user_id'], key=free_key, key_type=game_key, used=True, pool=POOL)
+            await insert_key_generation(user_id=chat_id, key=free_key, key_type=game_key, used=True, pool=POOL)
             loadbars[i] = snippet['bold'].format(text=game_key + ": ") + snippet['code'].format(text=free_key)
             continue
         else:
@@ -77,7 +77,7 @@ async def update_loadbar(chat_id: int, game_key: str, session: aiohttp.ClientSes
         try:
             key = task.result()
             keys.append(key)
-            await insert_key_generation(user_id=cache['user_id'], key=key, key_type=game_key, used=True, pool=POOL)
+            await insert_key_generation(user_id=chat_id, key=key, key_type=game_key, used=True, pool=POOL)
             loadbars[i] = snippet['bold'].format(text=game_key + ": ") + \
                             snippet['code'].format(text=key or translate[cache['lang']]['update_loadbar'][4])
         except Exception as e:

@@ -411,8 +411,8 @@ async def delete_task_by_id(id:int, pool=POOL) -> None:
 
 
 #key funcs
-async def insert_key_generation(user_id:int, key:str, key_type:str, used=True, pool=POOL) -> None:
-    if user_id is None or key is None or key_type is None:
+async def insert_key_generation(user_id:int, key:str, key_type:str, used:bool=True, pool=POOL) -> None:
+    if not any([key, key_type, user_id]):
         return
     if pool is None:
         pool = await get_pool()
@@ -426,7 +426,7 @@ async def insert_key_generation(user_id:int, key:str, key_type:str, used=True, p
             await conn.execute(
                 f'INSERT INTO "{SCHEMAS["HAMSTER"]}".keys (user_id, key, time, type, used) ' +
                 'VALUES ($1, $2, $3, $4, $5) ' +
-                'ON CONFLICT (key) DO UPDATE SET used = EXCLUDED.used, user_id = EXCLUDED.user_id, time = EXCLUDED.time',
+                'ON CONFLICT (key) DO UPDATE SET used = EXCLUDED.used, user_id = EXCLUDED.user_id',
                 num, key, now(), key_type, used
             )
 
