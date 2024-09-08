@@ -149,7 +149,7 @@ async def get_tickets(user_id: int, start=0, end=None, giveaway_id=None, pool=PO
 
     async with pool.acquire() as conn:
         async with conn.transaction():
-            promo = await get_promotions(pool=pool, giveaway_id=giveaway_id, all=True)
+            promo = await get_promotions(pool=pool, task_type='giveaway', all=True)
             giveaway = promo[str(giveaway_id)]
             tasks = [int(x) for x in giveaway.get('link').split(',')]
             checkers = await get_full_checkers(user_id, pool)
