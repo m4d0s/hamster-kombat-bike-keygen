@@ -45,8 +45,8 @@ async def generate_giveaways_menu(callback_query: types.CallbackQuery) -> None:
     keyboard = InlineKeyboardMarkup()
     for giveaway in all_giveaways:
         now_time = now()
-        prefix = '' if giveaway['expire'] > now_time else translate[cache['lang']]['generate_giveaways_menu'][11]
-        keyboard.add(InlineKeyboardButton(text=giveaways[giveaway]['name'] + ' ' + prefix, callback_data=f'giveaway_{giveaways[giveaway]["id"]}'))
+        prefix = '' if all_giveaways[giveaway]['expire'] > now_time else translate[cache['lang']]['generate_giveaways_menu'][11]
+        keyboard.add(InlineKeyboardButton(text=all_giveaways[giveaway]['name'] + ' ' + prefix, callback_data=f'giveaway_{all_giveaways[giveaway]["id"]}'))
     if request_level(cache['right'], 2, callback_query.message.chat.id): # 2 - giveaways
         keyboard.add(InlineKeyboardButton(text=translate[cache['lang']]['generate_giveaways_menu'][8], callback_data='delete_giveaway'),
                      InlineKeyboardButton(text=translate[cache['lang']]['generate_giveaways_menu'][9], callback_data='add_giveaway'))
