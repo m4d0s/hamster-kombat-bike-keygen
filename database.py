@@ -149,14 +149,16 @@ async def get_tickets(user_id: int, start=0, end=None, giveaway_id=None, pool=PO
 
     async with pool.acquire() as conn:
         async with conn.transaction():
-            promo = await get_promotions(pool=pool, task_type='giveaway', all=True)
-            giveaway = promo[str(giveaway_id)]
-            tasks = [int(x) for x in giveaway.get('link').split(',')]
-            checkers = await get_full_checkers(user_id, pool)
             acceptable = []
-            for checker in checkers:
-                if checker.get('promo_id') == giveaway.get('promo_id') or checker.get('promo_id') in tasks:
-                    acceptable.append(checker.get('id'))
+            if giveaway_id:
+                promo = await get_promotions(pool=pool, task_type='giveaway', all=True)
+                giveaway = promo[str(giveaway_id)]
+                tasks = [int(x) for x in giveaway.get('link').split(',')]
+                checkers = await get_full_checkers(user_id, pool)
+                acceptable = []
+                for checker in checkers:
+                    if checker.get('promo_id') == giveaway.get('promo_id') or checker.get('promo_id') in tasks:
+                        acceptable.append(checker.get('id'))
             args = [f"time >= {start}" if start else "", f"time <= {end}" if end else "", f"checker_id IN {tuple(acceptable)}" if acceptable else ""]
             args = "AND " + " AND ".join(arg for arg in args if arg) if args else ""
             records = await conn.fetch(f'SELECT * FROM "{SCHEMAS["PROMOTION"]}".tickets WHERE user_id = $1 {args}', num)

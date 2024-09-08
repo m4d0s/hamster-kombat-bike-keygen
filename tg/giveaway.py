@@ -193,7 +193,7 @@ async def roll_the_dice_by_keys(giveaway_id:int) -> None:
         user = await get_user(user_id, pool=POOL, tg=False)
         if user:
             fill_joined.append(user_id)
-            tickets_of_user = await get_tickets(user_id, start=curr['time'], end=curr['expire'], giveaway_id=curr['id'], pool=POOL)
+            tickets_of_user = await get_tickets(user_id, start=curr['time'], end=curr['expire'], pool=POOL)
             tickets.extend(tickets_of_user)
             continue
     joined = fill_joined
