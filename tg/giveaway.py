@@ -20,6 +20,7 @@ from database import (get_promotions, get_full_checker, delete_user, get_user, f
 logger = get_logger()
 
 async def wait_the_giveaway(giveaway_id, wait):
+    logger.info(f'Giveaway #{giveaway_id} will be rolled in {format_remaining_time(wait)}.')
     await asyncio.sleep(wait)
     await roll_the_dice_by_keys(giveaway_id)
 
@@ -42,8 +43,10 @@ async def generate_giveaways_menu(callback_query: types.CallbackQuery) -> None:
     text += snippet['bold'].format(text=translate[cache['lang']]['generate_giveaways_menu'][7]) + '\n'
     
     keyboard = InlineKeyboardMarkup()
-    for giveaway in giveaways:
-        keyboard.add(InlineKeyboardButton(text=giveaways[giveaway]['name'], callback_data=f'giveaway_{giveaways[giveaway]["id"]}'))
+    for giveaway in all_giveaways:
+        now_time = now()
+        prefix = '' if giveaway['expire'] > now_time else translate[cache['lang']]['generate_giveaways_menu'][11]
+        keyboard.add(InlineKeyboardButton(text=giveaways[giveaway]['name'] + ' ' + prefix, callback_data=f'giveaway_{giveaways[giveaway]["id"]}'))
     if request_level(cache['right'], 2, callback_query.message.chat.id): # 2 - giveaways
         keyboard.add(InlineKeyboardButton(text=translate[cache['lang']]['generate_giveaways_menu'][8], callback_data='delete_giveaway'),
                      InlineKeyboardButton(text=translate[cache['lang']]['generate_giveaways_menu'][9], callback_data='add_giveaway'))
@@ -179,31 +182,39 @@ async def roll_early_dice(callback_query: types.CallbackQuery) -> None:
     await roll_the_dice_by_keys(int(callback_query.data.split('_')[2]))
 
 async def roll_the_dice_by_keys(giveaway_id:int) -> None:
-    joined = await get_checker_by_task_id(giveaway_id, pool=POOL)
+    joined, fill_joined = await get_checker_by_task_id(giveaway_id, pool=POOL), []
     promo = await get_promotions(task_type='giveaway', pool=POOL, all=True)
     curr = promo[str(giveaway_id)]
-    tickets = []
+    winners, tickets = [], []
     for user_id in joined:
         user = await get_user(user_id, pool=POOL, tg=False)
-        if not user:
-            joined.remove(user_id)
+        if user:
+            fill_joined.append(user_id)
+            tickets_of_user = await get_tickets(user_id, start=curr['time'], end=curr['expire'], giveaway_id=curr['id'], pool=POOL)
+            tickets.extend(tickets_of_user)
             continue
-        tickets.extend(await get_tickets(user_id, start=curr['time'], end=curr['expire'], giveaway_id=curr['id'], pool=POOL))
+    joined = fill_joined
     tickets.sort(key=lambda x: x[0])
     if len(tickets) == 0:
         return
-    for prize in range(len(curr['prizes'])):
+    
+    index = 0
+    over_prizes = len(curr['prizes']) > len(joined)
+    while len(winners) < len(curr['prizes']):
+        prize = curr['prizes'][index]
         tg_user = None
         while not tg_user:
             winner = random.choice(tickets)
             win_user = await get_user(winner[1], pool=POOL)
+            if win_user in winners and not over_prizes:
+                continue
+            winners.append(winner[1])
+            index += 1
             try:
                 tg_user = bot.get_chat_member(chat_id=win_user['tg_id'], user_id=win_user['tg_id'])
             except (ChatNotFound, BadRequest):
                 await delete_user(win_user['tg_id'], pool=POOL)
-                for i in range(len(tickets)):
-                    if tickets[i][1] == winner[1]:
-                        tickets.pop(i)
+                tickets = [t for t in tickets if t[1] != winner[1]]
                 continue
         cache = await get_cached_data(win_user['tg_id'])
         curr['prizes'][prize]['winner_id'] = await get_user_id(winner[1], pool=POOL)

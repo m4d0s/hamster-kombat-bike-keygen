@@ -7,7 +7,7 @@ from .message import send_error_message, new_message, try_to_delete, try_to_edit
 from .cache import get_cached_data, set_cached_data
 from .process import update_report
 
-from c_telegram import dp, BOT_INFO, bot, snippet, translate, POOL, request_level
+from c_telegram import dp, BOT_INFO, bot, snippet, translate, POOL, request_level, db_config
 from generate import get_logger
 
 logger = get_logger()
@@ -28,14 +28,31 @@ async def mass_report(message: types.Message) -> None:
 
 async def send_report_example(message: types.Message) -> None:
     cache = await get_cached_data(message.chat.id) ##cache
-    if cache['report']:
+    if 'report' in cache and cache['report']:
         await try_to_delete(chat_id=message.chat.id, message_id=cache['report'])
         cache['report'] = None
-        
+    links = []
+    if db_config.get('main_channel', None):
+        try:
+            checker = await bot.get_chat(db_config.get('main_channel'))
+            if checker.username:
+                links.append(("Main channel",'https://t.me/' + checker.username))
+        except:
+            pass
+    if db_config.get('main_group', None):
+        try:
+            checker = await bot.get_chat(db_config.get('main_group'))
+            if checker.username:
+                links.append(("Main group",'https://t.me/' + checker.username))
+        except:
+            pass
+    links.append(("Bot link", 'https://t.me/' + BOT_INFO.username))
+    
+    links = snippet['block'].format(text='\n'.join(f"[{x[0]}][{x[1]}]" for x in links))
     code_example = translate[cache['lang']]['send_report_example'][2] + ":\n" \
-        + snippet['code-block'].format(lang=cache['lang'], text=translate[cache['lang']]['send_report_example'][4]) + "\n\n"
+        + '\n'.join(snippet['code-block'].format(lang=x, text=translate[x]['send_report_example'][4]) for x in translate) + "\n\n"
     example = translate[cache['lang']]['send_report_example'][3] + ":\n" \
-        + snippet['code'].format(text=translate[cache['lang']]['send_report_example'][5])
+        + links
         
     warning = f"\n\n{translate[cache['lang']]['send_report_example'][1]}"
     text = f"{translate[cache['lang']]['send_report_example'][0]}\n\n"

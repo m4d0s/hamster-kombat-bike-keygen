@@ -103,7 +103,7 @@
                 25000
             ],
             "RETRY": 13,
-            "DISABLED": false,
+            "DISABLED": true,
             "ALGORITMV0": true
         },
         "MAT": {
