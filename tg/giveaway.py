@@ -70,7 +70,7 @@ async def process_callback_giveaway(callback_query: types.CallbackQuery) -> None
     if promo_id not in giveaways and str(promo_id) not in used:
         await bot.answer_callback_query(callback_query.id, show_alert=True, text=translate[cache['lang']]['process_callback_giveaway'][8])
         return
-    tickets = await get_tickets(user_id=callback_query.message.chat.id, start=giveaways[promo_id]['time'], end=giveaways[promo_id]['expire'], pool=POOL)
+    tickets = await get_tickets(user_id=callback_query.message.chat.id, start=giveaways[promo_id]['time'], end=giveaways[promo_id]['expire'], pool=POOL, tg=True)
     text = snippet['bold'].format(text=(translate[cache['lang']]['process_callback_giveaway'][1].format(name=giveaways[promo_id]['name'])))
     text += '\n\n' + translate[cache['lang']]['process_callback_giveaway'][2] + '\n'
 
