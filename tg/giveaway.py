@@ -223,7 +223,7 @@ async def roll_the_dice_by_keys(giveaway_id:int) -> None:
         text = snippet['bold'].format(text=translate[cache['lang']]['roll_the_dice_by_keys'][0]) + '\n\n'
         text += snippet['italic'].format(text=translate[cache['lang']]['roll_the_dice_by_keys'][1].format(prize=curr['prizes'][index]['name'])) + '\n'
         text += snippet['italic'].format(text=translate[cache['lang']]['roll_the_dice_by_keys'][2].format(sponsors=curr['prizes'][index]['owner_id'])) + '\n'
-        keyboard = InlineKeyboardMarkup().add(InlineKeyboardButton(text=curr['name'], callback_data=f'giveaway_{curr['id']}'))
+        keyboard = InlineKeyboardMarkup().add(InlineKeyboardButton(text=curr['name'], callback_data=f"giveaway_{curr['id']}"))
         await new_message(chat_id=win_user['tg_id'], text=text, keyboard=keyboard)
     
     await insert_task(curr, task_type='giveaway', pool=POOL)
