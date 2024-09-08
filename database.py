@@ -134,7 +134,7 @@ async def append_ticket(user_id: int, checker_id: int, pool=POOL):
                 num, checker_id, now()
             )
 
-async def get_tickets(user_id: int, start=0, end=None, giveaway_id=None, pool=POOL):
+async def get_tickets(user_id: int, start=0, end=None, giveaway_id=None, pool=POOL, tg=False):
     end = end or now()
     
     if user_id is None:
@@ -144,7 +144,7 @@ async def get_tickets(user_id: int, start=0, end=None, giveaway_id=None, pool=PO
         pool = await get_pool()
     
     num = await get_user_id(user_id, pool)
-    if num is None:
+    if num is None and tg:
         return []
 
     async with pool.acquire() as conn:
