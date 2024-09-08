@@ -110,10 +110,9 @@ async def process_callback_giveaway(callback_query: types.CallbackQuery) -> None
             
             # Формируем строку с информацией о призе
             if now() > giveaways[promo_id]['expire']:
-                user = await get_user(user_id=get_user(prize['winner_id']), pool=POOL, tg=False)
-                username = user.get('username', '-') if user and user.get('username', '-') else '-'
-                prize_text = f"#{i+1} {combined_prizes}\n\t{translate[cache['lang']]['process_callback_giveaway'][11]}" +\
-                                    username if username != '-' else snippet['code'].format(text=str(user.get('tg_id', -1)))
+                user = await get_user(user_id=prize['winner_id'], pool=POOL, tg=False)
+                username = '@' + user.get('tg_username', '-') if user and user.get('username', '-') != '-' else snippet['code'].format(text=str(user.get('tg_id', -1)))
+                prize_text = f"#{i+1} {combined_prizes}\n\t{translate[cache['lang']]['process_callback_giveaway'][11]} " + f'({username})'
             else:
                 prize_text = f"#{i+1} {combined_prizes}\n\t{translate[cache['lang']]['process_callback_giveaway'][10]}{' + '.join(prize['owner_id'])}"
             
@@ -211,7 +210,6 @@ async def roll_the_dice_by_keys(giveaway_id:int) -> None:
             if win_user in winners and not over_prizes:
                 continue
             winners.append(winner['user_id'])
-            index += 1
             try:
                 tg_user = await bot.get_chat_member(chat_id=win_user['tg_id'], user_id=win_user['tg_id'])
             except (ChatNotFound, BadRequest):
@@ -225,6 +223,7 @@ async def roll_the_dice_by_keys(giveaway_id:int) -> None:
         text += snippet['italic'].format(text=translate[cache['lang']]['roll_the_dice_by_keys'][2].format(sponsors=curr['prizes'][index]['owner_id'])) + '\n'
         keyboard = InlineKeyboardMarkup().add(InlineKeyboardButton(text=curr['name'], callback_data=f"giveaway_{curr['id']}"))
         await new_message(chat_id=win_user['tg_id'], text=text, keyboard=keyboard)
+        index += 1
     
     await insert_task(curr, task_type='giveaway', pool=POOL)
 
