@@ -197,7 +197,7 @@ async def roll_the_dice_by_keys(giveaway_id:int) -> None:
             tickets.extend(tickets_of_user)
             continue
     joined = fill_joined
-    tickets.sort(key=lambda x: x[0])
+    tickets.sort(key=lambda x: x['time'])
     if len(tickets) == 0:
         return
     
@@ -217,7 +217,7 @@ async def roll_the_dice_by_keys(giveaway_id:int) -> None:
                 tg_user = bot.get_chat_member(chat_id=win_user['tg_id'], user_id=win_user['tg_id'])
             except (ChatNotFound, BadRequest):
                 await delete_user(win_user['tg_id'], pool=POOL)
-                tickets = [t for t in tickets if t[1] != winner[1]]
+                tickets = [t for t in tickets if t['user_id'] != winner[1]]
                 continue
         cache = await get_cached_data(win_user['tg_id'])
         curr['prizes'][prize]['winner_id'] = await get_user_id(winner[1], pool=POOL)
