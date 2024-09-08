@@ -45,7 +45,7 @@ async def generate_giveaways_menu(callback_query: types.CallbackQuery) -> None:
     keyboard = InlineKeyboardMarkup()
     for giveaway in all_giveaways:
         now_time = now()
-        prefix = '' if all_giveaways[giveaway]['expire'] > now_time else translate[cache['lang']]['generate_giveaways_menu'][11]
+        prefix = '' if all_giveaways[giveaway]['expire'] > now_time else '(' + translate[cache['lang']]['generate_giveaways_menu'][11] + ')'
         keyboard.add(InlineKeyboardButton(text=all_giveaways[giveaway]['name'] + ' ' + prefix, callback_data=f'giveaway_{all_giveaways[giveaway]["id"]}'))
     if request_level(cache['right'], 2, callback_query.message.chat.id): # 2 - giveaways
         keyboard.add(InlineKeyboardButton(text=translate[cache['lang']]['generate_giveaways_menu'][8], callback_data='delete_giveaway'),
@@ -107,9 +107,9 @@ async def process_callback_giveaway(callback_query: types.CallbackQuery) -> None
             
             # Объединяем все призы для текущего места через '+'
             combined_prizes = ' + '.join(prize_links)
-            
+            expired_gv = now() > giveaways[promo_id]['expire']
             # Формируем строку с информацией о призе
-            if now() > giveaways[promo_id]['expire']:
+            if expired_gv:
                 user = await get_user(user_id=prize['winner_id'], pool=POOL, tg=False)
                 username = '@' + user.get('tg_username', '-') if user and user.get('tg_username', '-') != '-' else snippet['code'].format(text=str(user.get('tg_id', -1)))
                 prize_text = f"#{i+1} {combined_prizes}\n\t{translate[cache['lang']]['process_callback_giveaway'][11]} " + username
@@ -123,10 +123,11 @@ async def process_callback_giveaway(callback_query: types.CallbackQuery) -> None
     else:
         text += '\n' + snippet['italic'].format(text=translate[cache['lang']]['process_callback_giveaway'][6])
 
+    key = 7 if not now() > expired_gv else 15
     text += '\n\n' + giveaways[promo_id]['desc']
     text += '\n\n' + translate[cache['lang']]['process_callback_giveaway'][5].format(count=len(tickets)) \
             + '\n' + snippet['italic'].format(text=translate[cache['lang']]['process_callback_giveaway'][3])\
-            + '\n' + snippet['bold'].format(text=translate[cache['lang']]['process_callback_giveaway'][7]
+            + '\n' + snippet['bold'].format(text=translate[cache['lang']]['process_callback_giveaway'][key]
                                     .format(time=format_remaining_time(giveaways[promo_id]['expire'])))
     keyboard = InlineKeyboardMarkup()
     if all(str(x) in used for x in req if x != ''):

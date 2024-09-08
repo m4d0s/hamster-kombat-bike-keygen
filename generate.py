@@ -130,35 +130,31 @@ def generate_debug_key() -> str:
     return config['DEBUG_KEY'] + '-' + ''.join(random.choice(symbols) for _ in range(10))
 
 async def get_key(session, game_key, pool=None):
-    proxy = await get_free_proxy(pool)
-    logger.debug(f'Fetching {game_key}...')
-    if not proxy:
-        proxy = {'link': None, 'version': 'local'}
-    if ipv6_mask and not is_local_address(ipv6_mask) and proxy['link'] is not None:
-        ipv6_addr = proxy['link']
-        connector = aiohttp.TCPConnector(ssl=False, local_addr=(ipv6_addr, 0, 0, 0), family=socket.AddressFamily.AF_INET6)
-        async with aiohttp.ClientSession(connector=connector) as session:
-            return await _make_request(session, proxy, game_key, pool)
-    promo_code = None
-    
     if config['DEBUG']:
         promo_code = generate_debug_key()
         game_key = config['DEBUG_GAME']
         await asyncio.sleep((random.random() * 5) + 5)
         return promo_code
-    else:   
-        return await _make_request(session, proxy, game_key, pool)
+    
+    proxy = await get_free_proxy(pool)
+    logger.debug(f'Fetching {game_key}...')
+    if not proxy:
+        proxy = {'link': None, 'work':False, 'version': 'local'}
+    if proxy['version'] == 'ipv6':
+        ipv6_addr = proxy['link']
+        connector = aiohttp.TCPConnector(ssl=False, local_addr=(ipv6_addr, 0, 0, 0), family=socket.AddressFamily.AF_INET6)
+        async with aiohttp.ClientSession(connector=connector) as session:
+            return await _make_request(session, proxy, game_key, pool)
+    return await _make_request(session, proxy, game_key, pool)
 
 async def _make_request(session, proxy, game_key, pool = None, max_attempts = 5):
     promo_code = None
-    attempts = 0
+    attempts_lost = 0
     try:
         game_config = config['EVENTS'][game_key]
         delay_ms = random.randint(config['EVENTS'][game_key]['EVENTS_DELAY'][0], config['EVENTS'][game_key]['EVENTS_DELAY'][1]) \
-            if not config['EVENTS'][game_key]['ALGORITMV0'] \
-                    else random.randint(1000, 2000)
-        attempts = game_config['RETRY'] if not config['EVENTS'][game_key]['ALGORITMV0'] \
-                    else config['V0_RETRY']
+                    if not config['EVENTS'][game_key]['ALGORITMV0'] else random.randint(2000, 3000)
+        attempts = game_config['RETRY'] if not config['EVENTS'][game_key]['ALGORITMV0'] else config['V0_RETRY']
         client_id = str(uuid.uuid4())
 
         body = {
@@ -166,12 +162,10 @@ async def _make_request(session, proxy, game_key, pool = None, max_attempts = 5)
             'clientId': client_id,
             'clientOrigin': ['ios', 'android'].pop(random.randint(0, 1))
         }
-        login_client_data = await fetch_api(session, '/promo/login-client', body, proxy=proxy)
-        await delay(delay_ms, "Login delay")
         
         auth_token = None
-        attempts = max_attempts
-        while not auth_token and attempts > 0:
+        attempts_lost = max_attempts
+        while not auth_token and attempts_lost > 0:
             attempts -= 1
             login_client_data = await fetch_api(session, '/promo/login-client', body, proxy=proxy)
             await delay(delay_ms, "Login delay")
@@ -200,8 +194,8 @@ async def _make_request(session, proxy, game_key, pool = None, max_attempts = 5)
                 'promoId': game_config['PROMO_ID'],
             }
             
-            attempts = max_attempts
-            while not promo_code and attempts > 0:
+            attempts_lost = max_attempts
+            while not promo_code and attempts_lost > 0:
                 attempts -= 1
                 create_code_data = await fetch_api(session, '/promo/create-code', body, auth_token, proxy=proxy)
                 promo_code = create_code_data.get('promoCode', None)

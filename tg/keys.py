@@ -79,7 +79,7 @@ async def process_callback_generate_key(callback_query: types.CallbackQuery) -> 
     mess = await new_message(text=text, chat_id=callback_query.message.chat.id, keyboard=keyboard)
     if cache.get('welcome'):
         await try_to_delete(chat_id=callback_query.message.chat.id, message_id=cache['welcome'])
-    cache['welcome'] = mess.message_id
+        cache['welcome'] = mess.message_id
     await set_cached_data(callback_query.message.chat.id, cache)
 
 @dp.callback_query_handler(lambda c: c.data.startswith('countkey_'))
