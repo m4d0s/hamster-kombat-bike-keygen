@@ -213,7 +213,7 @@ async def roll_the_dice_by_keys(giveaway_id:int) -> None:
             winners.append(winner['user_id'])
             index += 1
             try:
-                tg_user = bot.get_chat_member(chat_id=win_user['tg_id'], user_id=win_user['tg_id'])
+                tg_user = await bot.get_chat_member(chat_id=win_user['tg_id'], user_id=win_user['tg_id'])
             except (ChatNotFound, BadRequest):
                 await delete_user(win_user['tg_id'], pool=POOL)
                 tickets = [t for t in tickets if t['user_id'] != winner['user_id']]
