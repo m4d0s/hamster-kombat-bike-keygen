@@ -143,8 +143,8 @@ async def get_tickets(user_id: int, start=0, end=None, giveaway_id=None, pool=PO
     if pool is None:
         pool = await get_pool()
     
-    num = await get_user_id(user_id, pool)
-    if num is None and tg:
+    num = await get_user_id(user_id, pool) if tg else user_id
+    if num is None:
         return []
 
     async with pool.acquire() as conn:
