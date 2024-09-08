@@ -20,7 +20,7 @@ from database import (get_promotions, get_full_checker, delete_user, get_user, f
 logger = get_logger()
 
 async def wait_the_giveaway(giveaway_id, wait):
-    logger.info(f'Giveaway #{giveaway_id} will be rolled in {format_remaining_time(wait)}.')
+    logger.info(f'Giveaway #{giveaway_id} will be rolled in {format_remaining_time(now() + wait)}.')
     await asyncio.sleep(wait)
     await roll_the_dice_by_keys(giveaway_id)
 
