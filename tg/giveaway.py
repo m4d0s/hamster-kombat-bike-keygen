@@ -110,7 +110,10 @@ async def process_callback_giveaway(callback_query: types.CallbackQuery) -> None
             
             # Формируем строку с информацией о призе
             if now() > giveaways[promo_id]['expire']:
-                prize_text = f"#{i+1} {combined_prizes}\n\t{translate[cache['lang']]['process_callback_giveaway'][11]}{prize['winner_id']}"
+                user = await get_user(user_id=get_user(prize['winner_id']), pool=POOL, tg=False)
+                username = user.get('username', '-') if user and user.get('username', '-') else '-'
+                prize_text = f"#{i+1} {combined_prizes}\n\t{translate[cache['lang']]['process_callback_giveaway'][11]}{username if username != '-' \
+                                                                                                                else snippet['code'].format(text=str(user.get('tg_id', -1)))}"
             else:
                 prize_text = f"#{i+1} {combined_prizes}\n\t{translate[cache['lang']]['process_callback_giveaway'][10]}{' + '.join(prize['owner_id'])}"
             
