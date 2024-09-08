@@ -204,28 +204,27 @@ async def roll_the_dice_by_keys(giveaway_id:int) -> None:
     index = 0
     over_prizes = len(curr['prizes']) > len(joined)
     while len(winners) < len(curr['prizes']):
-        prize = curr['prizes'][index]
         tg_user = None
         while not tg_user:
             winner = random.choice(tickets)
-            win_user = await get_user(winner[1], pool=POOL)
+            win_user = await get_user(winner['user_id'], pool=POOL, tg=False)
             if win_user in winners and not over_prizes:
                 continue
-            winners.append(winner[1])
+            winners.append(winner['user_id'])
             index += 1
             try:
                 tg_user = bot.get_chat_member(chat_id=win_user['tg_id'], user_id=win_user['tg_id'])
             except (ChatNotFound, BadRequest):
                 await delete_user(win_user['tg_id'], pool=POOL)
-                tickets = [t for t in tickets if t['user_id'] != winner[1]]
+                tickets = [t for t in tickets if t['user_id'] != winner['user_id']]
                 continue
         cache = await get_cached_data(win_user['tg_id'])
-        curr['prizes'][prize]['winner_id'] = await get_user_id(winner[1], pool=POOL)
+        curr['prizes'][index]['winner_id'] = winner['user_id']
         text = snippet['bold'].format(text=translate[cache['lang']]['roll_the_dice_by_keys'][0]) + '\n\n'
-        text += snippet['italic'].format(text=translate[cache['lang']]['roll_the_dice_by_keys'][1]) + '\n'
-        text += snippet['italic'].format(text=translate[cache['lang']]['roll_the_dice_by_keys'][2]) + '\n'
-        
-        await new_message(chat_id=winner[1], text=text)
+        text += snippet['italic'].format(text=translate[cache['lang']]['roll_the_dice_by_keys'][1].format(prize=curr['prizes'][index]['name'])) + '\n'
+        text += snippet['italic'].format(text=translate[cache['lang']]['roll_the_dice_by_keys'][2].format(sponsors=curr['prizes'][index]['owner_id'])) + '\n'
+        keyboard = InlineKeyboardMarkup().add(InlineKeyboardButton(text=curr['name'], callback_data=f'giveaway_{curr['id']}'))
+        await new_message(chat_id=win_user['tg_id'], text=text, keyboard=keyboard)
     
     await insert_task(curr, task_type='giveaway', pool=POOL)
 
